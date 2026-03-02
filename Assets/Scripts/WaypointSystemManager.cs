@@ -260,12 +260,13 @@ public class WaypointSystemManager : MonoBehaviour
         if (metronomePrefab != null)
         {
             metronomeObject = Instantiate(metronomePrefab, Vector3.zero, Quaternion.identity);
+            metronomeObject.transform.localScale = Vector3.one * 0.02f; // Ensure it's very small (finger-tip sized)
         }
         else
         {
             // Create default sphere
             metronomeObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            metronomeObject.transform.localScale = Vector3.one * 0.1f;  // Small 10cm sphere
+            metronomeObject.transform.localScale = Vector3.one * 0.02f;  // Small 2cm sphere (tip of a finger)
             Destroy(metronomeObject.GetComponent<Collider>());
         }
         
