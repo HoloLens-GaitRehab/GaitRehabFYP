@@ -30,8 +30,22 @@ public class StatsUiToggle : MonoBehaviour
     [Header("Start Session Button")]
     public bool showStartSessionButton = true;
     public float startButtonDistance = 1.0f;
-    public Vector3 startButtonOffset = new Vector3(0f, -0.05f, 0f);
+    public Vector3 startButtonOffset = new Vector3(0f, 0.2f, 0f);
+    public bool followStartButtonVerticalGaze = false;
+    public float startButtonMinHeightAboveEyes = 0.4f;
     public bool hideStartButtonAfterStart = true;
+
+    [Header("Hands-Free Start (Dwell)")]
+    public bool useDwellStart = true;
+    public float startDwellSeconds = 1.5f;
+    public float startGazeAngleThreshold = 8f;
+    public float startGazeMaxDistance = 2.5f;
+    public float dwellBarWidth = 0.16f;
+    public float dwellBarHeight = 0.015f;
+    public float dwellBarDepth = 0.005f;
+    public float dwellBarVerticalOffset = -0.07f;
+    public Color dwellBarBackgroundColor = new Color(0f, 0f, 0f, 0.75f);
+    public Color dwellBarFillColor = new Color(0.2f, 0.9f, 0.2f, 0.95f);
 
     private GameObject canvasObj;
     private GameObject panelObj;
@@ -44,6 +58,12 @@ public class StatsUiToggle : MonoBehaviour
     private GameObject mrtkStatsButton;
     private GameObject mrtkMetronomeButton;
     private GameObject startSessionButton;
+    private GameObject startDwellBarRoot;
+    private Transform startDwellBarFill;
+    private Renderer startDwellBarBgRenderer;
+    private Renderer startDwellBarFillRenderer;
+    private float startDwellTimer;
+    private bool startTriggered;
     private Transform cameraTransform;
     private Vector3 followVelocity;
     private Vector3 worldOffset;
@@ -175,6 +195,8 @@ public class StatsUiToggle : MonoBehaviour
 
     void Update()
     {
+        UpdateStartDwellActivation();
+
         if (panelObj == null || panelText == null)
             return;
 
@@ -304,10 +326,13 @@ public class StatsUiToggle : MonoBehaviour
         if (interactable != null)
         {
             interactable.OnClick.RemoveAllListeners();
-            interactable.OnClick.AddListener(OnStartSessionPressed);
+            if (!useDwellStart)
+            {
+                interactable.OnClick.AddListener(OnStartSessionPressed);
+            }
         }
 
-        SetMrtkButtonLabel(startSessionButton, "Start");
+        SetMrtkButtonLabel(startSessionButton, useDwellStart ? "Look & Hold" : "Start");
         UpdateStartSessionButtonPose();
     }
 
@@ -349,8 +374,126 @@ public class StatsUiToggle : MonoBehaviour
         labelRect.sizeDelta = buttonSize;
         labelRect.anchoredPosition = Vector2.zero;
 
-        startSessionFallbackButton.onClick.AddListener(OnStartSessionPressed);
+        if (!useDwellStart)
+        {
+            startSessionFallbackButton.onClick.AddListener(OnStartSessionPressed);
+        }
         UpdateStartSessionButtonPose();
+    }
+
+    void EnsureStartDwellBar()
+    {
+        if (!useDwellStart || startDwellBarRoot != null)
+            return;
+
+        startDwellBarRoot = new GameObject("StartDwellProgressBar");
+
+        GameObject bgObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        bgObj.name = "DwellBarBackground";
+        Destroy(bgObj.GetComponent<Collider>());
+        bgObj.transform.SetParent(startDwellBarRoot.transform, false);
+        bgObj.transform.localScale = new Vector3(dwellBarWidth, dwellBarHeight, dwellBarDepth);
+        startDwellBarBgRenderer = bgObj.GetComponent<Renderer>();
+
+        GameObject fillObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        fillObj.name = "DwellBarFill";
+        Destroy(fillObj.GetComponent<Collider>());
+        fillObj.transform.SetParent(startDwellBarRoot.transform, false);
+        startDwellBarFill = fillObj.transform;
+        startDwellBarFill.localScale = new Vector3(0.0001f, dwellBarHeight * 0.8f, dwellBarDepth * 0.8f);
+        startDwellBarFill.localPosition = new Vector3(-dwellBarWidth * 0.5f, 0f, -0.001f);
+        startDwellBarFillRenderer = fillObj.GetComponent<Renderer>();
+
+        Shader shader = Shader.Find("Sprites/Default");
+        if (shader == null)
+        {
+            shader = Shader.Find("Unlit/Color");
+        }
+        if (shader != null)
+        {
+            if (startDwellBarBgRenderer != null)
+            {
+                startDwellBarBgRenderer.material = new Material(shader);
+                startDwellBarBgRenderer.material.color = dwellBarBackgroundColor;
+            }
+            if (startDwellBarFillRenderer != null)
+            {
+                startDwellBarFillRenderer.material = new Material(shader);
+                startDwellBarFillRenderer.material.color = dwellBarFillColor;
+            }
+        }
+
+        startDwellBarRoot.SetActive(false);
+    }
+
+    Transform GetActiveStartTarget()
+    {
+        if (startSessionButton != null && startSessionButton.activeSelf)
+            return startSessionButton.transform;
+
+        if (startSessionFallbackCanvas != null && startSessionFallbackCanvas.activeSelf)
+            return startSessionFallbackCanvas.transform;
+
+        return null;
+    }
+
+    void UpdateStartDwellActivation()
+    {
+        if (!useDwellStart || startTriggered)
+            return;
+
+        if (cameraTransform == null)
+            return;
+
+        Transform target = GetActiveStartTarget();
+        EnsureStartDwellBar();
+
+        if (target == null)
+        {
+            startDwellTimer = 0f;
+            if (startDwellBarRoot != null)
+            {
+                startDwellBarRoot.SetActive(false);
+            }
+            return;
+        }
+
+        Vector3 toTarget = target.position - cameraTransform.position;
+        float distance = toTarget.magnitude;
+        float angle = distance > 0.001f ? Vector3.Angle(cameraTransform.forward, toTarget.normalized) : 180f;
+        bool isGazing = angle <= Mathf.Max(1f, startGazeAngleThreshold) && distance <= Mathf.Max(0.2f, startGazeMaxDistance);
+
+        if (isGazing)
+        {
+            startDwellTimer += Time.deltaTime;
+        }
+        else
+        {
+            startDwellTimer = Mathf.Max(0f, startDwellTimer - Time.deltaTime * 2f);
+        }
+
+        float progress = Mathf.Clamp01(startDwellTimer / Mathf.Max(0.2f, startDwellSeconds));
+        UpdateDwellBarVisual(target, progress);
+
+        if (progress >= 1f)
+        {
+            startTriggered = true;
+            OnStartSessionPressed();
+        }
+    }
+
+    void UpdateDwellBarVisual(Transform target, float progress)
+    {
+        if (startDwellBarRoot == null || startDwellBarFill == null)
+            return;
+
+        startDwellBarRoot.SetActive(progress > 0.001f || target != null);
+        startDwellBarRoot.transform.position = target.position + target.up * dwellBarVerticalOffset;
+        startDwellBarRoot.transform.rotation = target.rotation;
+
+        float fillWidth = Mathf.Max(0.0001f, dwellBarWidth * progress);
+        startDwellBarFill.localScale = new Vector3(fillWidth, dwellBarHeight * 0.8f, dwellBarDepth * 0.8f);
+        startDwellBarFill.localPosition = new Vector3((-dwellBarWidth * 0.5f) + (fillWidth * 0.5f), 0f, -0.001f);
     }
 
     void UpdateStartSessionButtonPose()
@@ -358,13 +501,38 @@ public class StatsUiToggle : MonoBehaviour
         if (cameraTransform == null)
             return;
 
+        Vector3 horizontalForward = cameraTransform.forward;
+        horizontalForward.y = 0f;
+        if (horizontalForward.sqrMagnitude < 0.0001f)
+        {
+            horizontalForward = cameraTransform.parent != null ? cameraTransform.parent.forward : Vector3.forward;
+            horizontalForward.y = 0f;
+        }
+        horizontalForward.Normalize();
+
+        Vector3 horizontalRight = Vector3.Cross(Vector3.up, horizontalForward).normalized;
+
         Vector3 targetPos = cameraTransform.position
-                            + cameraTransform.forward * startButtonDistance
-                            + cameraTransform.right * startButtonOffset.x
-                            + cameraTransform.up * startButtonOffset.y;
+                            + horizontalForward * startButtonDistance
+                            + horizontalRight * startButtonOffset.x
+                            + horizontalForward * startButtonOffset.z;
+
+        float verticalOffset = startButtonOffset.y;
+        if (followStartButtonVerticalGaze)
+        {
+            verticalOffset += cameraTransform.forward.y * startButtonDistance;
+        }
+        else
+        {
+            verticalOffset = Mathf.Max(verticalOffset, startButtonMinHeightAboveEyes);
+        }
+        targetPos.y = cameraTransform.position.y + verticalOffset;
 
         Vector3 toCamera = cameraTransform.position - targetPos;
-        toCamera.y = 0f;
+        if (!followStartButtonVerticalGaze)
+        {
+            toCamera.y = 0f;
+        }
         if (toCamera.sqrMagnitude < 0.001f)
         {
             toCamera = -cameraTransform.forward;
@@ -407,6 +575,11 @@ public class StatsUiToggle : MonoBehaviour
             {
                 startSessionFallbackButton.gameObject.SetActive(false);
             }
+        }
+
+        if (startDwellBarRoot != null)
+        {
+            startDwellBarRoot.SetActive(false);
         }
     }
 
