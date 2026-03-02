@@ -17,6 +17,7 @@ public class WaypointSystemManager : MonoBehaviour
     public bool enableMetronome = false;
     public GameObject metronomePrefab;  // Assign a small sphere/cube
     public float metronomeBPM = 40f;    // Beats per minute (slower default - adjust to your preference)
+    [Range(0.25f, 1.5f)] public float metronomeSpeedMultiplier = 0.75f;
     public Color metronomeColor = Color.yellow;
     public float metronomeHeightOffset = -0.3f; // Lower than gaze (meters)
     public bool showMetronomeArc = true;
@@ -259,19 +260,17 @@ public class WaypointSystemManager : MonoBehaviour
             SetupMetronomeArc();
         }
         
-        metronomeBeatTime = 60f / metronomeBPM;
-        Debug.Log("Visual metronome enabled at " + metronomeBPM + " BPM");
+        float effectiveBpm = Mathf.Max(1f, metronomeBPM * Mathf.Max(0.1f, metronomeSpeedMultiplier));
+        metronomeBeatTime = 60f / effectiveBpm;
+        Debug.Log("Visual metronome enabled at " + effectiveBpm + " BPM");
     }
     
     void UpdateMetronome()
     {
-        // Get center position in front of player
-        Vector3 forward = playerCamera.forward;
-        forward.y = 0;
-        forward.Normalize();
-        
+        // Get center position along full gaze direction (horizontal + vertical)
+        Vector3 forward = playerCamera.forward.normalized;
         Vector3 centerPos = playerCamera.position + forward * 1.5f;
-        centerPos.y = playerCamera.position.y + metronomeHeightOffset;  // Lower than eye level
+        centerPos += playerCamera.up * metronomeHeightOffset;
         
         // Calculate pendulum swing on semicircular arc (slower swing)
         float beatProgress = (Time.time % metronomeBeatTime) / metronomeBeatTime;
@@ -284,10 +283,8 @@ public class WaypointSystemManager : MonoBehaviour
         // Arc radius (smaller for eye level)
         float arcRadius = 0.3f;
         
-        // Get right vector for side-to-side movement
-        Vector3 right = playerCamera.right;
-        right.y = 0;
-        right.Normalize();
+        // Get right vector for side-to-side movement relative to current gaze orientation
+        Vector3 right = playerCamera.right.normalized;
 
         if (showMetronomeArc && metronomeArcLine != null)
         {
