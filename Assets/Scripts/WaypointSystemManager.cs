@@ -2,6 +2,10 @@ using UnityEngine;
 
 public class WaypointSystemManager : MonoBehaviour
 {
+    [Header("Session Flow")]
+    public bool requireManualStart = true;
+    public bool useStraightLineSession = true;
+
     [Header("Waypoint Settings")]
     public GameObject waypointPrefab;        // Assign a sphere prefab here
     public int totalWaypoints = 10;
@@ -29,6 +33,13 @@ public class WaypointSystemManager : MonoBehaviour
     public Color metronomeArcColor = new Color(1f, 1f, 0f, 0.5f);
     public float metronomeArcWidth = 0.01f;
     public int metronomeArcSegments = 24;
+
+    [Header("Straight Guide Line")]
+    public Color straightGuideLineColor = Color.green;
+    public float straightGuideLineWidth = 0.08f;
+    public float straightGuideLineLength = 15f;
+    public float straightGuideLineFloorOffset = 0.02f;
+    public float assumedEyeHeight = 1.6f;
     
     private Transform playerCamera;
     private int waypointsCollected = 0;
@@ -42,6 +53,8 @@ public class WaypointSystemManager : MonoBehaviour
     private float metronomeBeatTime;
     private GameObject metronomeArcObject;
     private LineRenderer metronomeArcLine;
+    private GameObject straightGuideLineObject;
+    private LineRenderer straightGuideLine;
     
     void Start()
     {
@@ -53,7 +66,7 @@ public class WaypointSystemManager : MonoBehaviour
             return;
         }
         
-        if (waypointPrefab == null)
+        if (!useStraightLineSession && waypointPrefab == null)
         {
             Debug.LogError("WaypointSystemManager: Waypoint prefab not assigned!");
             return;
@@ -69,12 +82,17 @@ public class WaypointSystemManager : MonoBehaviour
             statsText.gameObject.SetActive(!hideStatsText);
         }
         
-        // Start the session after a moment (let user orient)
-        Invoke("StartSession", 1f);
+        if (!requireManualStart)
+        {
+            Invoke("StartSession", 1f);
+        }
     }
     
     void StartSession()
     {
+        if (sessionActive)
+            return;
+
         sessionActive = true;
         sessionStartTime = Time.time;
         lastCameraPosition = playerCamera.position;
@@ -85,8 +103,20 @@ public class WaypointSystemManager : MonoBehaviour
             SetupMetronome();
         }
         
+        if (useStraightLineSession)
+        {
+            SpawnStraightGuideLine();
+            Debug.Log("Straight-line session started.");
+            return;
+        }
+
         SpawnNextWaypoint();
         Debug.Log("Waypoint session started! Collect " + totalWaypoints + " waypoints.");
+    }
+
+    public void StartSessionFromButton()
+    {
+        StartSession();
     }
 
     void CreateStatsText()
@@ -232,6 +262,53 @@ public class WaypointSystemManager : MonoBehaviour
             minutes,
             seconds
         );
+    }
+
+    void SpawnStraightGuideLine()
+    {
+        if (playerCamera == null)
+            return;
+
+        if (straightGuideLineObject == null)
+        {
+            straightGuideLineObject = new GameObject("StraightGuideLine");
+            straightGuideLine = straightGuideLineObject.AddComponent<LineRenderer>();
+            straightGuideLine.useWorldSpace = true;
+            straightGuideLine.positionCount = 2;
+            straightGuideLine.startWidth = straightGuideLineWidth;
+            straightGuideLine.endWidth = straightGuideLineWidth;
+            straightGuideLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            straightGuideLine.receiveShadows = false;
+
+            Shader lineShader = Shader.Find("Sprites/Default");
+            if (lineShader == null)
+            {
+                lineShader = Shader.Find("Unlit/Color");
+            }
+            if (lineShader != null)
+            {
+                straightGuideLine.material = new Material(lineShader);
+                straightGuideLine.material.color = straightGuideLineColor;
+            }
+            straightGuideLine.startColor = straightGuideLineColor;
+            straightGuideLine.endColor = straightGuideLineColor;
+        }
+
+        Vector3 forward = playerCamera.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude < 0.001f)
+        {
+            forward = playerCamera.parent != null ? playerCamera.parent.forward : Vector3.forward;
+            forward.y = 0f;
+        }
+        forward.Normalize();
+
+        float floorY = playerCamera.position.y - assumedEyeHeight + straightGuideLineFloorOffset;
+        Vector3 start = new Vector3(playerCamera.position.x, floorY, playerCamera.position.z);
+        Vector3 end = start + forward * straightGuideLineLength;
+
+        straightGuideLine.SetPosition(0, start);
+        straightGuideLine.SetPosition(1, end);
     }
     
     void EndSession()

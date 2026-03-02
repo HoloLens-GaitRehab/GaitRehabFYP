@@ -27,14 +27,22 @@ public class StatsUiToggle : MonoBehaviour
     public Vector3 metronomeButtonLocalPos = new Vector3(0f, -0.16f, 0f);
     public Vector3 mrtkButtonScale = new Vector3(0.06f, 0.06f, 0.06f);
 
+    [Header("Start Session Button")]
+    public bool showStartSessionButton = true;
+    public float startButtonDistance = 1.0f;
+    public Vector3 startButtonOffset = new Vector3(0f, -0.05f, 0f);
+    public bool hideStartButtonAfterStart = true;
+
     private GameObject canvasObj;
     private GameObject panelObj;
     private Text panelText;
     private Button toggleButton;
     private Button metronomeButton;
     private Text metronomeButtonText;
+    private Button startSessionFallbackButton;
     private GameObject mrtkStatsButton;
     private GameObject mrtkMetronomeButton;
+    private GameObject startSessionButton;
     private Transform cameraTransform;
     private Vector3 followVelocity;
     private Vector3 worldOffset;
@@ -51,6 +59,7 @@ public class StatsUiToggle : MonoBehaviour
         cameraTransform = Camera.main != null ? Camera.main.transform : null;
 
         CreateUi();
+        TryCreateStartSessionButton();
         SetupVoiceCommands();
     }
 
@@ -188,8 +197,20 @@ public class StatsUiToggle : MonoBehaviour
 
     void LateUpdate()
     {
+        if (cameraTransform == null)
+        {
+            cameraTransform = Camera.main != null ? Camera.main.transform : null;
+        }
+
+        if (startSessionButton == null && startSessionFallbackButton == null)
+        {
+            TryCreateStartSessionButton();
+        }
+
         if (canvasObj == null || cameraTransform == null)
             return;
+
+        UpdateStartSessionButtonPose();
 
         Vector3 targetPos = followPositionOnly ? cameraTransform.position + worldOffset : GetTargetPosition();
         Quaternion targetRot = followPositionOnly ? fixedRotation : GetTargetRotation();
@@ -253,6 +274,109 @@ public class StatsUiToggle : MonoBehaviour
 
         bool newState = !waypointManager.enableMetronome;
         waypointManager.ToggleMetronome(newState);
+    }
+
+    void TryCreateStartSessionButton()
+    {
+        if (!showStartSessionButton || cameraTransform == null)
+            return;
+
+        if (useMrtkButtons && mrtkButtonPrefab != null)
+        {
+            CreateMrtkStartSessionButton();
+            return;
+        }
+
+        CreateFallbackStartButton();
+    }
+
+    void CreateMrtkStartSessionButton()
+    {
+        if (startSessionButton != null)
+            return;
+
+        startSessionButton = Instantiate(mrtkButtonPrefab);
+        startSessionButton.name = "StartSessionButton";
+        startSessionButton.transform.localScale = mrtkButtonScale;
+
+        Interactable interactable = startSessionButton.GetComponent<Interactable>();
+        if (interactable != null)
+        {
+            interactable.OnClick.RemoveAllListeners();
+            interactable.OnClick.AddListener(OnStartSessionPressed);
+        }
+
+        SetMrtkButtonLabel(startSessionButton, "Start");
+        UpdateStartSessionButtonPose();
+    }
+
+    void CreateFallbackStartButton()
+    {
+        if (startSessionFallbackButton != null || canvasObj == null)
+            return;
+
+        GameObject buttonObj = new GameObject("StartSessionButtonFallback");
+        buttonObj.transform.SetParent(canvasObj.transform, false);
+
+        Image buttonImage = buttonObj.AddComponent<Image>();
+        buttonImage.color = new Color(0.2f, 0.7f, 0.2f, 0.95f);
+
+        startSessionFallbackButton = buttonObj.AddComponent<Button>();
+        RectTransform buttonRect = buttonObj.GetComponent<RectTransform>();
+        buttonRect.sizeDelta = buttonSize;
+        buttonRect.anchoredPosition = new Vector2(0f, 20f);
+
+        GameObject labelObj = new GameObject("StartText");
+        labelObj.transform.SetParent(buttonObj.transform, false);
+        Text label = labelObj.AddComponent<Text>();
+        label.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        label.fontSize = 30;
+        label.color = Color.white;
+        label.alignment = TextAnchor.MiddleCenter;
+        label.text = "Start";
+        RectTransform labelRect = label.GetComponent<RectTransform>();
+        labelRect.sizeDelta = buttonSize;
+        labelRect.anchoredPosition = Vector2.zero;
+
+        startSessionFallbackButton.onClick.AddListener(OnStartSessionPressed);
+    }
+
+    void UpdateStartSessionButtonPose()
+    {
+        if (startSessionButton == null || cameraTransform == null || !startSessionButton.activeSelf)
+            return;
+
+        Vector3 targetPos = cameraTransform.position
+                            + cameraTransform.forward * startButtonDistance
+                            + cameraTransform.right * startButtonOffset.x
+                            + cameraTransform.up * startButtonOffset.y;
+        startSessionButton.transform.position = targetPos;
+
+        Vector3 toCamera = cameraTransform.position - targetPos;
+        toCamera.y = 0f;
+        if (toCamera.sqrMagnitude < 0.001f)
+        {
+            toCamera = -cameraTransform.forward;
+        }
+        startSessionButton.transform.rotation = Quaternion.LookRotation(-toCamera.normalized, Vector3.up);
+    }
+
+    void OnStartSessionPressed()
+    {
+        if (waypointManager != null)
+        {
+            waypointManager.StartSessionFromButton();
+        }
+
+        if (hideStartButtonAfterStart && startSessionButton != null)
+        {
+            startSessionButton.SetActive(false);
+        }
+
+        if (hideStartButtonAfterStart && startSessionFallbackButton != null)
+        {
+            startSessionFallbackButton.gameObject.SetActive(false);
+        }
     }
 
     void SetupVoiceCommands()
