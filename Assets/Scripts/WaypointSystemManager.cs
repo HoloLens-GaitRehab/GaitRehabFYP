@@ -4,6 +4,8 @@ public class WaypointSystemManager : MonoBehaviour
 {
     [Header("Session Flow")]
     public bool requireManualStart = true;
+    public float lineEndReachDistance = 0.6f;
+    public float lineEndProgressPadding = 0.2f;
     
     [Header("Stats Display (Optional)")]
     public TextMesh statsText;
@@ -18,12 +20,13 @@ public class WaypointSystemManager : MonoBehaviour
     public GameObject metronomePrefab;  // Assign a small sphere/cube
     public float metronomeBPM = 40f;    // Beats per minute (slower default - adjust to your preference)
     [Range(0.25f, 1.5f)] public float metronomeSpeedMultiplier = 0.75f;
-    public Color metronomeColor = Color.yellow;
+    public Color metronomeColor = Color.white;
     public float metronomeHeightOffset = -0.3f; // Lower than gaze (meters)
     public bool showMetronomeArc = true;
     public Color metronomeArcColor = new Color(1f, 1f, 0f, 0.5f);
     public float metronomeArcWidth = 0.01f;
     public int metronomeArcSegments = 24;
+    public float metronomeRedShiftDistance = 1.0f;
 
     [Header("Straight Guide Line")]
     public Color straightGuideLineColor = Color.green;
@@ -32,10 +35,16 @@ public class WaypointSystemManager : MonoBehaviour
     public float straightGuideLineLength = 15f;
     public float straightGuideLineFloorOffset = 0.02f;
     public float assumedEyeHeight = 1.6f;
+
+    [Header("Off-course Tracking")]
+    public bool trackOffCourse = true;
+    public float offCourseTolerance = 0.25f;
     
     private Transform playerCamera;
     private float sessionStartTime;
     private bool sessionActive = false;
+    private bool sessionCompleted = false;
+    private string finalSessionStats = "";
     private float totalDistanceTraveled = 0f;
     private Vector3 lastCameraPosition;
     private GameObject metronomeObject;
@@ -45,6 +54,12 @@ public class WaypointSystemManager : MonoBehaviour
     private LineRenderer metronomeArcLine;
     private GameObject straightGuideLineObject;
     private LineRenderer straightGuideLine;
+    private Vector3 straightLineStart;
+    private Vector3 straightLineEnd;
+    private bool hasStraightLinePath = false;
+    private float offCourseTimeSeconds;
+
+    public float CurrentOffCoursePercent { get; private set; }
     
     void Start()
     {
@@ -78,8 +93,12 @@ public class WaypointSystemManager : MonoBehaviour
             return;
 
         sessionActive = true;
+        sessionCompleted = false;
+        finalSessionStats = "";
         sessionStartTime = Time.time;
         totalDistanceTraveled = 0f;
+        CurrentOffCoursePercent = 0f;
+        offCourseTimeSeconds = 0f;
         lastCameraPosition = playerCamera.position;
         
         // Setup metronome if enabled
@@ -89,6 +108,10 @@ public class WaypointSystemManager : MonoBehaviour
         }
 
         SpawnStraightGuideLine();
+        if (statsText != null)
+        {
+            statsText.text = "";
+        }
         Debug.Log("Straight-line session started.");
     }
 
@@ -130,6 +153,14 @@ public class WaypointSystemManager : MonoBehaviour
         {
             UpdateMetronome();
         }
+
+        UpdateOffCourse(Time.deltaTime);
+
+        if (HasReachedLineEnd())
+        {
+            CompleteSession();
+            return;
+        }
         
         UpdateStats();
     }
@@ -138,36 +169,24 @@ public class WaypointSystemManager : MonoBehaviour
     {
         if (statsText == null || !sessionActive)
             return;
-        
-        float elapsed = Time.time - sessionStartTime;
-        int minutes = (int)(elapsed / 60);
-        int seconds = (int)(elapsed % 60);
-        
-        statsText.text = string.Format(
-            "Distance: {0:F1}m\nTime: {1:00}:{2:00}",
-            totalDistanceTraveled,
-            minutes,
-            seconds
-        );
+
+        // Intentionally blank during session to reduce visual clutter.
+        statsText.text = "";
     }
 
     public string GetStatsText()
     {
+        if (sessionCompleted)
+        {
+            return finalSessionStats;
+        }
+
         if (!sessionActive)
         {
             return "Session not started";
         }
 
-        float elapsed = Time.time - sessionStartTime;
-        int minutes = (int)(elapsed / 60);
-        int seconds = (int)(elapsed % 60);
-
-        return string.Format(
-            "Distance: {0:F1}m\nTime: {1:00}:{2:00}",
-            totalDistanceTraveled,
-            minutes,
-            seconds
-        );
+        return "";
     }
 
     void SpawnStraightGuideLine()
@@ -219,6 +238,10 @@ public class WaypointSystemManager : MonoBehaviour
         Vector3 start = new Vector3(playerCamera.position.x, floorY, playerCamera.position.z);
         Vector3 end = start + forward * straightGuideLineLength;
 
+        straightLineStart = start;
+        straightLineEnd = end;
+        hasStraightLinePath = true;
+
         straightGuideLine.SetPosition(0, start);
         straightGuideLine.SetPosition(1, end);
     }
@@ -228,6 +251,107 @@ public class WaypointSystemManager : MonoBehaviour
         Color tint = straightGuideLineColor;
         tint.a = Mathf.Clamp01(straightGuideLineAlpha);
         return tint;
+    }
+
+    void UpdateOffCourse(float deltaTime)
+    {
+        if (!trackOffCourse || !hasStraightLinePath || deltaTime <= 0f || playerCamera == null)
+            return;
+
+        float clampedTolerance = Mathf.Max(0.1f, offCourseTolerance);
+
+        float lateralDistance = DistanceToInfiniteLineXZ(playerCamera.position, straightLineStart, straightLineEnd);
+        bool isOffCourse = lateralDistance > clampedTolerance;
+        if (isOffCourse)
+        {
+            offCourseTimeSeconds += deltaTime;
+        }
+
+        float elapsedTime = Mathf.Max(0.001f, Time.time - sessionStartTime);
+        if (elapsedTime > 0f)
+        {
+            CurrentOffCoursePercent = (offCourseTimeSeconds / elapsedTime) * 100f;
+        }
+    }
+
+    float DistanceToInfiniteLineXZ(Vector3 point, Vector3 lineStart, Vector3 lineEnd)
+    {
+        Vector2 p = new Vector2(point.x, point.z);
+        Vector2 a = new Vector2(lineStart.x, lineStart.z);
+        Vector2 b = new Vector2(lineEnd.x, lineEnd.z);
+        Vector2 ab = b - a;
+        float abSqr = ab.sqrMagnitude;
+
+        if (abSqr < 0.0001f)
+        {
+            return Vector2.Distance(p, a);
+        }
+
+        float t = Vector2.Dot(p - a, ab) / abSqr;
+        Vector2 nearest = a + ab * t;
+        return Vector2.Distance(p, nearest);
+    }
+
+    bool HasReachedLineEnd()
+    {
+        if (!hasStraightLinePath || playerCamera == null)
+            return false;
+
+        Vector2 start = new Vector2(straightLineStart.x, straightLineStart.z);
+        Vector2 end = new Vector2(straightLineEnd.x, straightLineEnd.z);
+        Vector2 current = new Vector2(playerCamera.position.x, playerCamera.position.z);
+        Vector2 path = end - start;
+
+        float pathLength = path.magnitude;
+        if (pathLength < 0.001f)
+            return false;
+
+        Vector2 pathDir = path / pathLength;
+        float alongDistance = Vector2.Dot(current - start, pathDir);
+        float distanceToEnd = Vector2.Distance(current, end);
+
+        bool nearEnd = distanceToEnd <= Mathf.Max(0.1f, lineEndReachDistance);
+        bool passedEnd = alongDistance >= pathLength - Mathf.Max(0f, lineEndProgressPadding);
+
+        return nearEnd || passedEnd;
+    }
+
+    void CompleteSession()
+    {
+        if (!sessionActive)
+            return;
+
+        sessionActive = false;
+        sessionCompleted = true;
+
+        float elapsed = Mathf.Max(0f, Time.time - sessionStartTime);
+        int minutes = (int)(elapsed / 60f);
+        int seconds = (int)(elapsed % 60f);
+
+        finalSessionStats = string.Format(
+            "Session complete!\nDistance: {0:F1}m\nOff-course: {1:F0}% ({2:F1}s)\nTime: {3:00}:{4:00}",
+            totalDistanceTraveled,
+            CurrentOffCoursePercent,
+            offCourseTimeSeconds,
+            minutes,
+            seconds
+        );
+
+        if (statsText != null)
+        {
+            statsText.text = finalSessionStats;
+        }
+
+        if (metronomeObject != null)
+        {
+            metronomeObject.SetActive(false);
+        }
+        if (metronomeArcObject != null)
+        {
+            metronomeArcObject.SetActive(false);
+        }
+
+        Debug.Log("Session completed at end of straight line.");
     }
     
     void SetupMetronome()
@@ -302,10 +426,26 @@ public class WaypointSystemManager : MonoBehaviour
         
         if (metronomeRenderer != null)
         {
+            float colorSeverity = GetCurrentOffCourseSeverity();
+            Color currentMetronomeColor = Color.Lerp(Color.white, Color.red, colorSeverity);
+            metronomeRenderer.material.color = currentMetronomeColor;
+
             // Brighten at the extremes of the swing
             float intensity = Mathf.Abs(angle) > 35f ? 3f : 1.5f;
-            metronomeRenderer.material.SetColor("_EmissionColor", metronomeColor * intensity);
+            metronomeRenderer.material.SetColor("_EmissionColor", currentMetronomeColor * intensity);
         }
+    }
+
+    float GetCurrentOffCourseSeverity()
+    {
+        if (!trackOffCourse || !hasStraightLinePath || playerCamera == null)
+            return 0f;
+
+        float lateralDistance = DistanceToInfiniteLineXZ(playerCamera.position, straightLineStart, straightLineEnd);
+        float clampedTolerance = Mathf.Max(0.1f, offCourseTolerance);
+        float redShiftDistance = Mathf.Max(clampedTolerance + 0.05f, metronomeRedShiftDistance);
+        float excess = Mathf.Max(0f, lateralDistance - clampedTolerance);
+        return Mathf.Clamp01(excess / (redShiftDistance - clampedTolerance));
     }
 
     void SetupMetronomeArc()
