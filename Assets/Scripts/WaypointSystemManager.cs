@@ -26,6 +26,7 @@ public class WaypointSystemManager : MonoBehaviour
 
     [Header("Straight Guide Line")]
     public Color straightGuideLineColor = Color.green;
+    [Range(0.05f, 1f)] public float straightGuideLineAlpha = 0.65f;
     public float straightGuideLineWidth = 0.08f;
     public float straightGuideLineLength = 15f;
     public float straightGuideLineFloorOffset = 0.02f;
@@ -192,10 +193,16 @@ public class WaypointSystemManager : MonoBehaviour
             if (lineShader != null)
             {
                 straightGuideLine.material = new Material(lineShader);
-                straightGuideLine.material.color = straightGuideLineColor;
+                straightGuideLine.material.color = GetStraightGuideLineTint();
             }
-            straightGuideLine.startColor = straightGuideLineColor;
-            straightGuideLine.endColor = straightGuideLineColor;
+        }
+
+        Color lineTint = GetStraightGuideLineTint();
+        straightGuideLine.startColor = lineTint;
+        straightGuideLine.endColor = lineTint;
+        if (straightGuideLine.material != null)
+        {
+            straightGuideLine.material.color = lineTint;
         }
 
         Vector3 forward = playerCamera.forward;
@@ -213,6 +220,13 @@ public class WaypointSystemManager : MonoBehaviour
 
         straightGuideLine.SetPosition(0, start);
         straightGuideLine.SetPosition(1, end);
+    }
+
+    Color GetStraightGuideLineTint()
+    {
+        Color tint = straightGuideLineColor;
+        tint.a = Mathf.Clamp01(straightGuideLineAlpha);
+        return tint;
     }
     
     void SetupMetronome()
