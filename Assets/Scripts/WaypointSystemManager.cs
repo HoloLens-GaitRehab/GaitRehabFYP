@@ -697,6 +697,21 @@ public class WaypointSystemManager : MonoBehaviour
             Color currentMetronomeColor = Color.Lerp(Color.white, Color.red, colorSeverity);
             metronomeRenderer.material.color = currentMetronomeColor;
 
+            if (showMetronomeArc && metronomeArcLine != null)
+            {
+                float targetAlpha = Mathf.Clamp01(metronomeArcColor.a);
+                Color baseArcColor = new Color(Color.white.r, Color.white.g, Color.white.b, targetAlpha);
+                Color offCourseArcColor = new Color(Color.red.r, Color.red.g, Color.red.b, targetAlpha);
+                Color currentArcColor = Color.Lerp(baseArcColor, offCourseArcColor, colorSeverity);
+
+                metronomeArcLine.startColor = currentArcColor;
+                metronomeArcLine.endColor = currentArcColor;
+                if (metronomeArcLine.material != null)
+                {
+                    metronomeArcLine.material.color = currentArcColor;
+                }
+            }
+
             // Brighten at the extremes of the swing
             float intensity = Mathf.Abs(angle) > 35f ? 3f : 1.5f;
             metronomeRenderer.material.SetColor("_EmissionColor", currentMetronomeColor * intensity);
