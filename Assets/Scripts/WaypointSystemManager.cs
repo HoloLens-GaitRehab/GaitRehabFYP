@@ -4,16 +4,6 @@ public class WaypointSystemManager : MonoBehaviour
 {
     [Header("Session Flow")]
     public bool requireManualStart = true;
-    public bool useStraightLineSession = true;
-
-    [Header("Waypoint Settings")]
-    public GameObject waypointPrefab;        // Assign a sphere prefab here
-    public int totalWaypoints = 10;
-    
-    [Header("Spawn Distance")]
-    public float minDistance = 1.0f;         // Min distance in front of player
-    public float maxDistance = 3.0f;         // Max distance in front of player
-    public float waypointHeight = 1.5f;      // Eye level (adjust if needed)
     
     [Header("Stats Display (Optional)")]
     public TextMesh statsText;
@@ -42,12 +32,10 @@ public class WaypointSystemManager : MonoBehaviour
     public float assumedEyeHeight = 1.6f;
     
     private Transform playerCamera;
-    private int waypointsCollected = 0;
     private float sessionStartTime;
     private bool sessionActive = false;
     private float totalDistanceTraveled = 0f;
     private Vector3 lastCameraPosition;
-    private Waypoint currentWaypoint;
     private GameObject metronomeObject;
     private Renderer metronomeRenderer;
     private float metronomeBeatTime;
@@ -63,12 +51,6 @@ public class WaypointSystemManager : MonoBehaviour
         if (playerCamera == null)
         {
             Debug.LogError("WaypointSystemManager: Main Camera not found!");
-            return;
-        }
-        
-        if (!useStraightLineSession && waypointPrefab == null)
-        {
-            Debug.LogError("WaypointSystemManager: Waypoint prefab not assigned!");
             return;
         }
 
@@ -95,6 +77,7 @@ public class WaypointSystemManager : MonoBehaviour
 
         sessionActive = true;
         sessionStartTime = Time.time;
+        totalDistanceTraveled = 0f;
         lastCameraPosition = playerCamera.position;
         
         // Setup metronome if enabled
@@ -102,16 +85,9 @@ public class WaypointSystemManager : MonoBehaviour
         {
             SetupMetronome();
         }
-        
-        if (useStraightLineSession)
-        {
-            SpawnStraightGuideLine();
-            Debug.Log("Straight-line session started.");
-            return;
-        }
 
-        SpawnNextWaypoint();
-        Debug.Log("Waypoint session started! Collect " + totalWaypoints + " waypoints.");
+        SpawnStraightGuideLine();
+        Debug.Log("Straight-line session started.");
     }
 
     public void StartSessionFromButton()
@@ -135,72 +111,6 @@ public class WaypointSystemManager : MonoBehaviour
             statsObj.transform.localPosition = new Vector3(0f, statsHeightOffset, statsDistanceFromCamera);
             statsObj.transform.localRotation = Quaternion.identity;
         }
-    }
-    
-    void SpawnNextWaypoint()
-    {
-        if (waypointsCollected >= totalWaypoints)
-        {
-            EndSession();
-            return;
-        }
-        
-        // Generate random position in front of player
-        Vector3 spawnPos = GenerateRandomPosition();
-        
-        // Instantiate waypoint
-        GameObject waypointObj = Instantiate(waypointPrefab, spawnPos, Quaternion.identity);
-        waypointObj.name = "Waypoint_" + (waypointsCollected + 1);
-        
-        // Get waypoint script
-        Waypoint waypoint = waypointObj.GetComponent<Waypoint>();
-        if (waypoint != null)
-        {
-            currentWaypoint = waypoint;
-            waypoint.OnWaypointCollected += OnWaypointCollected;
-        }
-        else
-        {
-            Debug.LogWarning("Waypoint prefab missing Waypoint script component!");
-        }
-        
-        Debug.Log("Spawned waypoint " + (waypointsCollected + 1) + " at " + spawnPos);
-    }
-    
-    Vector3 GenerateRandomPosition()
-    {
-        // Random distance in front
-        float distance = Random.Range(minDistance, maxDistance);
-        
-        // Random angle (±45 degrees from center)
-        float angle = Random.Range(-45f, 45f);
-        
-        // Get forward direction from camera
-        Vector3 forward = playerCamera.forward;
-        forward.y = 0;  // Keep horizontal
-        forward.Normalize();
-        
-        // Rotate by angle
-        Quaternion rot = Quaternion.Euler(0, angle, 0);
-        Vector3 direction = rot * forward;
-        
-        // Calculate world position
-        Vector3 position = playerCamera.position + (direction * distance);
-        position.y = playerCamera.position.y;  // Match current eye level
-        
-        return position;
-    }
-    
-    void OnWaypointCollected()
-    {
-        waypointsCollected++;
-        currentWaypoint = null;
-        Debug.Log("Waypoints collected: " + waypointsCollected + " / " + totalWaypoints);
-        
-        UpdateStats();
-        
-        // Spawn next waypoint after short delay
-        Invoke("SpawnNextWaypoint", 0.5f);
     }
     
     void Update()
@@ -232,11 +142,8 @@ public class WaypointSystemManager : MonoBehaviour
         int seconds = (int)(elapsed % 60);
         
         statsText.text = string.Format(
-            "Waypoints: {0}/{1}\nDistance: {2:F1}m\nOff-course: {3:F0}%\nTime: {4:00}:{5:00}",
-            waypointsCollected,
-            totalWaypoints,
+            "Distance: {0:F1}m\nTime: {1:00}:{2:00}",
             totalDistanceTraveled,
-            currentWaypoint != null ? currentWaypoint.CurrentOffCoursePercent : 0f,
             minutes,
             seconds
         );
@@ -254,11 +161,8 @@ public class WaypointSystemManager : MonoBehaviour
         int seconds = (int)(elapsed % 60);
 
         return string.Format(
-            "Waypoints: {0}/{1}\nDistance: {2:F1}m\nOff-course: {3:F0}%\nTime: {4:00}:{5:00}",
-            waypointsCollected,
-            totalWaypoints,
+            "Distance: {0:F1}m\nTime: {1:00}:{2:00}",
             totalDistanceTraveled,
-            currentWaypoint != null ? currentWaypoint.CurrentOffCoursePercent : 0f,
             minutes,
             seconds
         );
@@ -309,26 +213,6 @@ public class WaypointSystemManager : MonoBehaviour
 
         straightGuideLine.SetPosition(0, start);
         straightGuideLine.SetPosition(1, end);
-    }
-    
-    void EndSession()
-    {
-        sessionActive = false;
-        
-        float elapsed = Time.time - sessionStartTime;
-        int minutes = (int)(elapsed / 60);
-        int seconds = (int)(elapsed % 60);
-        
-        if (statsText != null)
-        {
-            statsText.text = string.Format(
-                "COMPLETE!\n{0} waypoints\nDistance: {1:F1}m\nTime: {2:00}:{3:00}",
-                totalWaypoints, totalDistanceTraveled, minutes, seconds
-            );
-            statsText.color = Color.green;
-        }
-        
-        Debug.Log("Session complete! Collected " + waypointsCollected + " in " + elapsed + "s. Distance: " + totalDistanceTraveled + "m");
     }
     
     void SetupMetronome()
