@@ -39,6 +39,14 @@ public class WaypointSystemManager : MonoBehaviour
     [Header("Off-course Tracking")]
     public bool trackOffCourse = true;
     public float offCourseTolerance = 0.25f;
+
+    [Header("Drift Direction Arrow")]
+    public bool enableDriftDirectionArrow = true;
+    public float driftArrowShowBuffer = 0.03f;
+    public float driftArrowDistance = 1.1f;
+    public float driftArrowVerticalOffset = -0.06f;
+    public float driftArrowScale = 0.02f;
+    public Color driftArrowBaseColor = Color.white;
     
     private Transform playerCamera;
     private float sessionStartTime;
@@ -58,6 +66,9 @@ public class WaypointSystemManager : MonoBehaviour
     private Vector3 straightLineEnd;
     private bool hasStraightLinePath = false;
     private float offCourseTimeSeconds;
+    private GameObject driftArrowObject;
+    private TextMesh driftArrowText;
+    private Renderer driftArrowRenderer;
 
     public float CurrentOffCoursePercent { get; private set; }
     
@@ -100,14 +111,24 @@ public class WaypointSystemManager : MonoBehaviour
         CurrentOffCoursePercent = 0f;
         offCourseTimeSeconds = 0f;
         lastCameraPosition = playerCamera.position;
-        
-        // Setup metronome if enabled
-        if (enableMetronome)
+
+        // Always spawn/show metronome when session starts
+        enableMetronome = true;
+        if (metronomeObject == null)
         {
             SetupMetronome();
         }
+        else
+        {
+            metronomeObject.SetActive(true);
+            if (metronomeArcObject != null)
+            {
+                metronomeArcObject.SetActive(showMetronomeArc);
+            }
+        }
 
         SpawnStraightGuideLine();
+        SetupDriftDirectionArrow();
         if (statsText != null)
         {
             statsText.text = "";
@@ -155,6 +176,7 @@ public class WaypointSystemManager : MonoBehaviour
         }
 
         UpdateOffCourse(Time.deltaTime);
+        UpdateDriftDirectionArrow();
 
         if (HasReachedLineEnd())
         {
@@ -274,6 +296,79 @@ public class WaypointSystemManager : MonoBehaviour
         }
     }
 
+    void SetupDriftDirectionArrow()
+    {
+        if (!enableDriftDirectionArrow)
+            return;
+
+        if (driftArrowObject == null)
+        {
+            driftArrowObject = new GameObject("DriftDirectionArrow");
+            driftArrowText = driftArrowObject.AddComponent<TextMesh>();
+            driftArrowText.text = "←";
+            driftArrowText.fontSize = 96;
+            driftArrowText.anchor = TextAnchor.MiddleCenter;
+            driftArrowText.alignment = TextAlignment.Center;
+            driftArrowText.color = driftArrowBaseColor;
+
+            driftArrowRenderer = driftArrowObject.GetComponent<Renderer>();
+        }
+
+        driftArrowObject.transform.localScale = Vector3.one * Mathf.Max(0.005f, driftArrowScale);
+        driftArrowObject.SetActive(false);
+    }
+
+    void UpdateDriftDirectionArrow()
+    {
+        if (driftArrowObject == null)
+        {
+            SetupDriftDirectionArrow();
+        }
+
+        if (!enableDriftDirectionArrow || !sessionActive || !hasStraightLinePath || playerCamera == null || driftArrowObject == null || driftArrowText == null)
+        {
+            if (driftArrowObject != null)
+            {
+                driftArrowObject.SetActive(false);
+            }
+            return;
+        }
+
+        float tolerance = Mathf.Max(0.1f, offCourseTolerance) + Mathf.Max(0f, driftArrowShowBuffer);
+        float signedLateralDistance = SignedDistanceToInfiniteLineXZ(playerCamera.position, straightLineStart, straightLineEnd);
+        float absDistance = Mathf.Abs(signedLateralDistance);
+
+        if (absDistance <= tolerance)
+        {
+            driftArrowObject.SetActive(false);
+            return;
+        }
+
+        // Reversed mapping: positive signed distance now shows right arrow.
+        driftArrowText.text = signedLateralDistance > 0f ? "→" : "←";
+
+        float severity = GetCurrentOffCourseSeverity();
+        Color arrowColor = Color.Lerp(driftArrowBaseColor, Color.red, severity);
+        driftArrowText.color = arrowColor;
+        if (driftArrowRenderer != null)
+        {
+            driftArrowRenderer.material.color = arrowColor;
+        }
+
+        Vector3 arrowPos = playerCamera.position
+                           + playerCamera.forward * driftArrowDistance
+                           + playerCamera.up * driftArrowVerticalOffset;
+        driftArrowObject.transform.position = arrowPos;
+
+        Vector3 toCamera = playerCamera.position - arrowPos;
+        if (toCamera.sqrMagnitude < 0.0001f)
+        {
+            toCamera = -playerCamera.forward;
+        }
+        driftArrowObject.transform.rotation = Quaternion.LookRotation(toCamera.normalized, Vector3.up);
+        driftArrowObject.SetActive(true);
+    }
+
     float DistanceToInfiniteLineXZ(Vector3 point, Vector3 lineStart, Vector3 lineEnd)
     {
         Vector2 p = new Vector2(point.x, point.z);
@@ -290,6 +385,23 @@ public class WaypointSystemManager : MonoBehaviour
         float t = Vector2.Dot(p - a, ab) / abSqr;
         Vector2 nearest = a + ab * t;
         return Vector2.Distance(p, nearest);
+    }
+
+    float SignedDistanceToInfiniteLineXZ(Vector3 point, Vector3 lineStart, Vector3 lineEnd)
+    {
+        Vector2 p = new Vector2(point.x, point.z);
+        Vector2 a = new Vector2(lineStart.x, lineStart.z);
+        Vector2 b = new Vector2(lineEnd.x, lineEnd.z);
+        Vector2 ab = b - a;
+        float abMagnitude = ab.magnitude;
+        if (abMagnitude < 0.0001f)
+        {
+            return 0f;
+        }
+
+        Vector2 dir = ab / abMagnitude;
+        Vector2 rightNormal = new Vector2(dir.y, -dir.x);
+        return Vector2.Dot(p - a, rightNormal);
     }
 
     bool HasReachedLineEnd()
@@ -349,6 +461,10 @@ public class WaypointSystemManager : MonoBehaviour
         if (metronomeArcObject != null)
         {
             metronomeArcObject.SetActive(false);
+        }
+        if (driftArrowObject != null)
+        {
+            driftArrowObject.SetActive(false);
         }
 
         Debug.Log("Session completed at end of straight line.");
