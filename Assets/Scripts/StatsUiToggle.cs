@@ -40,6 +40,7 @@ public class StatsUiToggle : MonoBehaviour
     private Button metronomeButton;
     private Text metronomeButtonText;
     private Button startSessionFallbackButton;
+    private GameObject startSessionFallbackCanvas;
     private GameObject mrtkStatsButton;
     private GameObject mrtkMetronomeButton;
     private GameObject startSessionButton;
@@ -312,11 +313,21 @@ public class StatsUiToggle : MonoBehaviour
 
     void CreateFallbackStartButton()
     {
-        if (startSessionFallbackButton != null || canvasObj == null)
+        if (startSessionFallbackButton != null || cameraTransform == null)
             return;
 
+        startSessionFallbackCanvas = new GameObject("StartSessionCanvas");
+        Canvas fallbackCanvas = startSessionFallbackCanvas.AddComponent<Canvas>();
+        fallbackCanvas.renderMode = RenderMode.WorldSpace;
+        startSessionFallbackCanvas.AddComponent<CanvasScaler>();
+        startSessionFallbackCanvas.AddComponent<GraphicRaycaster>();
+        startSessionFallbackCanvas.transform.localScale = Vector3.one * 0.0022f;
+
+        RectTransform canvasRect = startSessionFallbackCanvas.GetComponent<RectTransform>();
+        canvasRect.sizeDelta = new Vector2(300f, 180f);
+
         GameObject buttonObj = new GameObject("StartSessionButtonFallback");
-        buttonObj.transform.SetParent(canvasObj.transform, false);
+        buttonObj.transform.SetParent(startSessionFallbackCanvas.transform, false);
 
         Image buttonImage = buttonObj.AddComponent<Image>();
         buttonImage.color = new Color(0.2f, 0.7f, 0.2f, 0.95f);
@@ -339,18 +350,18 @@ public class StatsUiToggle : MonoBehaviour
         labelRect.anchoredPosition = Vector2.zero;
 
         startSessionFallbackButton.onClick.AddListener(OnStartSessionPressed);
+        UpdateStartSessionButtonPose();
     }
 
     void UpdateStartSessionButtonPose()
     {
-        if (startSessionButton == null || cameraTransform == null || !startSessionButton.activeSelf)
+        if (cameraTransform == null)
             return;
 
         Vector3 targetPos = cameraTransform.position
                             + cameraTransform.forward * startButtonDistance
                             + cameraTransform.right * startButtonOffset.x
                             + cameraTransform.up * startButtonOffset.y;
-        startSessionButton.transform.position = targetPos;
 
         Vector3 toCamera = cameraTransform.position - targetPos;
         toCamera.y = 0f;
@@ -358,7 +369,20 @@ public class StatsUiToggle : MonoBehaviour
         {
             toCamera = -cameraTransform.forward;
         }
-        startSessionButton.transform.rotation = Quaternion.LookRotation(-toCamera.normalized, Vector3.up);
+
+        Quaternion targetRot = Quaternion.LookRotation(-toCamera.normalized, Vector3.up);
+
+        if (startSessionButton != null && startSessionButton.activeSelf)
+        {
+            startSessionButton.transform.position = targetPos;
+            startSessionButton.transform.rotation = targetRot;
+        }
+
+        if (startSessionFallbackCanvas != null && startSessionFallbackCanvas.activeSelf)
+        {
+            startSessionFallbackCanvas.transform.position = targetPos;
+            startSessionFallbackCanvas.transform.rotation = targetRot;
+        }
     }
 
     void OnStartSessionPressed()
@@ -375,7 +399,14 @@ public class StatsUiToggle : MonoBehaviour
 
         if (hideStartButtonAfterStart && startSessionFallbackButton != null)
         {
-            startSessionFallbackButton.gameObject.SetActive(false);
+            if (startSessionFallbackCanvas != null)
+            {
+                startSessionFallbackCanvas.SetActive(false);
+            }
+            else
+            {
+                startSessionFallbackButton.gameObject.SetActive(false);
+            }
         }
     }
 
