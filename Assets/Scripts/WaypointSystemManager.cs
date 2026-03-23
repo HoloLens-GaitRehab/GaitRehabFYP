@@ -68,18 +68,7 @@ public class WaypointSystemManager : MonoBehaviour
     private string finalSessionStats = "";
     private float totalDistanceTraveled = 0f;
     private Vector3 lastCameraPosition;
-    private GameObject metronomeObject;
-    private Renderer metronomeRenderer;
-    private AudioSource metronomeAudioSource;
-    private AudioClip generatedMetronomeTickClip;
-    private float generatedTickFrequencyCached = -1f;
-    private float generatedTickDurationCached = -1f;
-    private float metronomeBeatTime;
-    private float previousMetronomeAngle;
-    private bool hasPreviousMetronomeAngle;
-    private float lastMetronomeTickTime = -10f;
-    private GameObject metronomeArcObject;
-    private LineRenderer metronomeArcLine;
+    private MetronomeController metronomeController = new MetronomeController();
     private GameObject straightGuideLineObject;
     private LineRenderer straightGuideLine;
     private GameObject leftRailObject;
@@ -135,23 +124,10 @@ public class WaypointSystemManager : MonoBehaviour
         offCourseTracker.Reset();
         CurrentOffCoursePercent = 0f;
         lastCameraPosition = playerCamera.position;
-        hasPreviousMetronomeAngle = false;
-        lastMetronomeTickTime = -10f;
 
         // Always spawn/show metronome when session starts
         enableMetronome = true;
-        if (metronomeObject == null)
-        {
-            SetupMetronome();
-        }
-        else
-        {
-            metronomeObject.SetActive(true);
-            if (metronomeArcObject != null)
-            {
-                metronomeArcObject.SetActive(showMetronomeArc);
-            }
-        }
+        metronomeController.StartOrEnable(this, GetMetronomeSettings());
 
         SpawnStraightGuideLine();
         SetupDriftDirectionArrow();
@@ -196,9 +172,9 @@ public class WaypointSystemManager : MonoBehaviour
         lastCameraPosition = playerCamera.position;
         
         // Update metronome
-        if (enableMetronome && metronomeObject != null)
+        if (enableMetronome)
         {
-            UpdateMetronome();
+            metronomeController.Update(playerCamera, GetMetronomeSettings(), GetCurrentOffCourseSeverity());
         }
 
         UpdateOffCourse(Time.deltaTime);
@@ -574,14 +550,7 @@ public class WaypointSystemManager : MonoBehaviour
             statsText.text = finalSessionStats;
         }
 
-        if (metronomeObject != null)
-        {
-            metronomeObject.SetActive(false);
-        }
-        if (metronomeArcObject != null)
-        {
-            metronomeArcObject.SetActive(false);
-        }
+        metronomeController.SetEnabled(false, showMetronomeArc);
         if (driftArrowObject != null)
         {
             driftArrowObject.SetActive(false);
@@ -598,193 +567,6 @@ public class WaypointSystemManager : MonoBehaviour
         Debug.Log("Session completed at end of straight line.");
     }
     
-    void SetupMetronome()
-    {
-        // Create metronome visual in front of player at floor level
-        if (metronomePrefab != null)
-        {
-            metronomeObject = Instantiate(metronomePrefab, Vector3.zero, Quaternion.identity);
-            metronomeObject.transform.localScale = Vector3.one * 0.02f; // Ensure it's very small (finger-tip sized)
-        }
-        else
-        {
-            // Create default sphere
-            metronomeObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            metronomeObject.transform.localScale = Vector3.one * 0.02f;  // Small 2cm sphere (tip of a finger)
-            Destroy(metronomeObject.GetComponent<Collider>());
-        }
-        
-        metronomeObject.name = "Metronome";
-        metronomeRenderer = metronomeObject.GetComponent<Renderer>();
-
-        if (metronomeAudioSource == null)
-        {
-            metronomeAudioSource = gameObject.GetComponent<AudioSource>();
-            if (metronomeAudioSource == null)
-            {
-                metronomeAudioSource = gameObject.AddComponent<AudioSource>();
-            }
-        }
-        metronomeAudioSource.playOnAwake = false;
-        metronomeAudioSource.spatialBlend = 0f;
-        metronomeAudioSource.loop = false;
-        
-        if (metronomeRenderer != null)
-        {
-            metronomeRenderer.material.color = metronomeColor;
-            metronomeRenderer.material.EnableKeyword("_EMISSION");
-        }
-
-        if (showMetronomeArc)
-        {
-            SetupMetronomeArc();
-        }
-        
-        float effectiveBpm = Mathf.Max(1f, metronomeBPM * Mathf.Max(0.1f, metronomeSpeedMultiplier));
-        metronomeBeatTime = 60f / effectiveBpm;
-        Debug.Log("Visual metronome enabled at " + effectiveBpm + " BPM");
-    }
-    
-    void UpdateMetronome()
-    {
-        // Get center position along full gaze direction (horizontal + vertical)
-        Vector3 forward = playerCamera.forward.normalized;
-        Vector3 centerPos = playerCamera.position + forward * 1.5f;
-        centerPos += playerCamera.up * metronomeHeightOffset;
-        
-        // Calculate pendulum swing on semicircular arc (slower swing)
-        float beatProgress = (Time.time % metronomeBeatTime) / metronomeBeatTime;
-        beatProgress = (beatProgress + 0.5f) % 1f; // invert phase (opposite direction)
-        float angle = Mathf.Sin(beatProgress * Mathf.PI * 2f) * 45f;  // ±45 degrees swing (reduced from 60)
-        TryPlayMetronomeCenterTick(angle);
-        
-        // Convert angle to radians
-        float angleRad = angle * Mathf.Deg2Rad;
-        
-        // Arc radius (smaller for eye level)
-        float arcRadius = 0.3f;
-        
-        // Get right vector for side-to-side movement relative to current gaze orientation
-        Vector3 right = playerCamera.right.normalized;
-
-        if (showMetronomeArc && metronomeArcLine != null)
-        {
-            UpdateMetronomeArc(centerPos, right, arcRadius);
-        }
-        
-        // Calculate position on arc (x = sin, y = +cos centered at gaze height)
-        float xOffset = Mathf.Sin(angleRad) * arcRadius;
-        float yOffset = Mathf.Cos(angleRad) * arcRadius;  // Centered at gaze height
-        
-        // Apply arc position
-        Vector3 metronomePos = centerPos + (right * xOffset);
-        metronomePos.y = centerPos.y + yOffset;
-        metronomeObject.transform.position = metronomePos;
-        
-        if (metronomeRenderer != null)
-        {
-            float colorSeverity = GetCurrentOffCourseSeverity();
-            Color currentMetronomeColor = Color.Lerp(Color.white, Color.red, colorSeverity);
-            metronomeRenderer.material.color = currentMetronomeColor;
-
-            if (showMetronomeArc && metronomeArcLine != null)
-            {
-                float targetAlpha = Mathf.Clamp01(metronomeArcColor.a);
-                Color baseArcColor = new Color(Color.white.r, Color.white.g, Color.white.b, targetAlpha);
-                Color offCourseArcColor = new Color(Color.red.r, Color.red.g, Color.red.b, targetAlpha);
-                Color currentArcColor = Color.Lerp(baseArcColor, offCourseArcColor, colorSeverity);
-
-                metronomeArcLine.startColor = currentArcColor;
-                metronomeArcLine.endColor = currentArcColor;
-                if (metronomeArcLine.material != null)
-                {
-                    metronomeArcLine.material.color = currentArcColor;
-                }
-            }
-
-            // Brighten at the extremes of the swing
-            float intensity = Mathf.Abs(angle) > 35f ? 3f : 1.5f;
-            metronomeRenderer.material.SetColor("_EmissionColor", currentMetronomeColor * intensity);
-        }
-    }
-
-    void TryPlayMetronomeCenterTick(float currentAngle)
-    {
-        AudioClip tickClip = GetMetronomeTickClip();
-        if (tickClip == null || metronomeAudioSource == null)
-        {
-            previousMetronomeAngle = currentAngle;
-            hasPreviousMetronomeAngle = true;
-            return;
-        }
-
-        if (!hasPreviousMetronomeAngle)
-        {
-            previousMetronomeAngle = currentAngle;
-            hasPreviousMetronomeAngle = true;
-            return;
-        }
-
-        bool crossedCenter = (previousMetronomeAngle < 0f && currentAngle >= 0f)
-                             || (previousMetronomeAngle > 0f && currentAngle <= 0f);
-
-        float minTickInterval = Mathf.Max(0.08f, metronomeBeatTime * 0.2f);
-        bool canTick = Time.time - lastMetronomeTickTime >= minTickInterval;
-
-        if (crossedCenter && canTick)
-        {
-            metronomeAudioSource.PlayOneShot(tickClip, metronomeTickVolume);
-            lastMetronomeTickTime = Time.time;
-        }
-
-        previousMetronomeAngle = currentAngle;
-    }
-
-    AudioClip GetMetronomeTickClip()
-    {
-        if (metronomeTickClip != null)
-        {
-            return metronomeTickClip;
-        }
-
-        if (!useGeneratedTickFallback)
-        {
-            return null;
-        }
-
-        float safeFrequency = Mathf.Clamp(generatedTickFrequencyHz, 300f, 5000f);
-        float safeDuration = Mathf.Clamp(generatedTickDurationSeconds, 0.01f, 0.2f);
-
-        if (generatedMetronomeTickClip == null
-            || !Mathf.Approximately(generatedTickFrequencyCached, safeFrequency)
-            || !Mathf.Approximately(generatedTickDurationCached, safeDuration))
-        {
-            generatedTickFrequencyCached = safeFrequency;
-            generatedTickDurationCached = safeDuration;
-            generatedMetronomeTickClip = BuildGeneratedTickClip(safeFrequency, safeDuration);
-        }
-
-        return generatedMetronomeTickClip;
-    }
-
-    AudioClip BuildGeneratedTickClip(float frequencyHz, float durationSeconds)
-    {
-        const int sampleRate = 44100;
-        int sampleCount = Mathf.Max(1, Mathf.RoundToInt(sampleRate * durationSeconds));
-        float[] samples = new float[sampleCount];
-
-        for (int i = 0; i < sampleCount; i++)
-        {
-            float t = i / (float)sampleRate;
-            float envelope = 1f - (i / (float)sampleCount);
-            samples[i] = Mathf.Sin(2f * Mathf.PI * frequencyHz * t) * envelope * 0.35f;
-        }
-
-        AudioClip clip = AudioClip.Create("GeneratedMetronomeTick", sampleCount, 1, sampleRate, false);
-        clip.SetData(samples, 0);
-        return clip;
-    }
-
     float GetCurrentOffCourseSeverity()
     {
         if (!trackOffCourse || !hasStraightLinePath || playerCamera == null)
@@ -793,61 +575,40 @@ public class WaypointSystemManager : MonoBehaviour
         return offCourseTracker.GetSeverity(offCourseTolerance, metronomeRedShiftDistance);
     }
 
-    void SetupMetronomeArc()
+    MetronomeController.Settings GetMetronomeSettings()
     {
-        metronomeArcObject = new GameObject("MetronomeArc");
-        metronomeArcLine = metronomeArcObject.AddComponent<LineRenderer>();
-        metronomeArcLine.useWorldSpace = true;
-        metronomeArcLine.positionCount = metronomeArcSegments + 1;
-        metronomeArcLine.startWidth = metronomeArcWidth;
-        metronomeArcLine.endWidth = metronomeArcWidth;
-        Shader arcShader = Shader.Find("Sprites/Default");
-        if (arcShader == null)
+        return new MetronomeController.Settings
         {
-            arcShader = Shader.Find("Unlit/Color");
-        }
-        if (arcShader != null)
-        {
-            metronomeArcLine.material = new Material(arcShader);
-            metronomeArcLine.material.color = metronomeArcColor;
-        }
-        metronomeArcLine.startColor = metronomeArcColor;
-        metronomeArcLine.endColor = metronomeArcColor;
+            metronomePrefab = metronomePrefab,
+            metronomeBPM = metronomeBPM,
+            metronomeSpeedMultiplier = metronomeSpeedMultiplier,
+            metronomeColor = metronomeColor,
+            metronomeHeightOffset = metronomeHeightOffset,
+            showMetronomeArc = showMetronomeArc,
+            metronomeArcColor = metronomeArcColor,
+            metronomeArcWidth = metronomeArcWidth,
+            metronomeArcSegments = metronomeArcSegments,
+            metronomeTickClip = metronomeTickClip,
+            metronomeTickVolume = metronomeTickVolume,
+            useGeneratedTickFallback = useGeneratedTickFallback,
+            generatedTickFrequencyHz = generatedTickFrequencyHz,
+            generatedTickDurationSeconds = generatedTickDurationSeconds
+        };
     }
 
-    void UpdateMetronomeArc(Vector3 centerPos, Vector3 right, float arcRadius)
-    {
-        float startAngle = -45f;
-        float endAngle = 45f;
-        float step = (endAngle - startAngle) / metronomeArcSegments;
-
-        for (int i = 0; i <= metronomeArcSegments; i++)
-        {
-            float angle = startAngle + step * i;
-            float angleRad = angle * Mathf.Deg2Rad;
-            float xOffset = Mathf.Sin(angleRad) * arcRadius;
-            float yOffset = Mathf.Cos(angleRad) * arcRadius;
-            Vector3 pos = centerPos + (right * xOffset);
-            pos.y = centerPos.y + yOffset;
-            metronomeArcLine.SetPosition(i, pos);
-        }
-    }
-    
     public void ToggleMetronome(bool enabled)
     {
         enableMetronome = enabled;
-        
-        if (metronomeObject != null)
+
+        if (!enabled)
         {
-            metronomeObject.SetActive(enabled);
+            metronomeController.SetEnabled(false, showMetronomeArc);
+            return;
         }
-        if (metronomeArcObject != null)
+
+        if (sessionActive)
         {
-            metronomeArcObject.SetActive(enabled && showMetronomeArc);
-        }
-        else if (enabled && sessionActive)
-        {
-            SetupMetronome();
+            metronomeController.StartOrEnable(this, GetMetronomeSettings());
         }
     }
 }
