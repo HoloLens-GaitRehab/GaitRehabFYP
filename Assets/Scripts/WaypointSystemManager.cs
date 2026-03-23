@@ -180,7 +180,8 @@ public class WaypointSystemManager : MonoBehaviour
             playerCamera,
             offCourseTolerance,
             driftArrowShowBuffer,
-            GetCurrentOffCourseSeverity()
+            GetCurrentOffCourseSeverity(),
+            GetStraightPathGuideSettings()
         );
         driftArrowController.Update(
             GetDriftArrowSettings(),
