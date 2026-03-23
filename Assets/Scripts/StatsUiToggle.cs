@@ -47,6 +47,14 @@ public class StatsUiToggle : MonoBehaviour
     public Color dwellBarBackgroundColor = new Color(0f, 0f, 0f, 0.75f);
     public Color dwellBarFillColor = new Color(0.2f, 0.9f, 0.2f, 0.95f);
 
+    [Header("Hands-Free Session Controls")]
+    public bool useDwellSessionControls = true;
+    [Range(0.5f, 3f)] public float sessionControlDwellSeconds = 1.1f;
+    [Range(1f, 5f)] public float sessionEndDwellSeconds = 2.4f;
+    [Range(8f, 60f)] public float sessionControlLookUpAngle = 25f;
+    [Range(0f, 2f)] public float sessionControlCooldownSeconds = 0.8f;
+    public bool requirePauseBeforeEnd = true;
+
     private GameObject canvasObj;
     private GameObject panelObj;
     private Text panelText;
@@ -65,6 +73,9 @@ public class StatsUiToggle : MonoBehaviour
     private float startDwellTimer;
     private bool startTriggered;
     private bool waitingForNextSession;
+    private float sessionControlHoldTimer;
+    private bool sessionControlWasHolding;
+    private float sessionControlCooldownUntil;
     private Transform cameraTransform;
     private Vector3 followVelocity;
     private Vector3 worldOffset;
@@ -198,6 +209,7 @@ public class StatsUiToggle : MonoBehaviour
     {
         UpdateStartButtonSessionCycle();
         UpdateStartDwellActivation();
+        UpdateSessionDwellControls();
 
         if (panelObj == null || panelText == null)
             return;
@@ -542,6 +554,69 @@ public class StatsUiToggle : MonoBehaviour
         startDwellBarFill.localPosition = new Vector3((-dwellBarWidth * 0.5f) + (fillWidth * 0.5f), 0f, -0.001f);
     }
 
+    void UpdateSessionDwellControls()
+    {
+        if (!useDwellSessionControls || waypointManager == null || cameraTransform == null)
+        {
+            sessionControlHoldTimer = 0f;
+            sessionControlWasHolding = false;
+            return;
+        }
+
+        if (!waypointManager.IsSessionActive)
+        {
+            sessionControlHoldTimer = 0f;
+            sessionControlWasHolding = false;
+            return;
+        }
+
+        if (Time.time < sessionControlCooldownUntil)
+        {
+            sessionControlHoldTimer = 0f;
+            sessionControlWasHolding = false;
+            return;
+        }
+
+        float lookUpThresholdDot = Mathf.Sin(Mathf.Deg2Rad * Mathf.Clamp(sessionControlLookUpAngle, 8f, 60f));
+        float lookUpDot = Vector3.Dot(cameraTransform.forward.normalized, Vector3.up);
+        bool isHoldingControl = lookUpDot >= lookUpThresholdDot;
+
+        if (isHoldingControl)
+        {
+            sessionControlHoldTimer += Time.deltaTime;
+            sessionControlWasHolding = true;
+            return;
+        }
+
+        if (!sessionControlWasHolding)
+            return;
+
+        float heldSeconds = sessionControlHoldTimer;
+        sessionControlHoldTimer = 0f;
+        sessionControlWasHolding = false;
+
+        if (heldSeconds >= sessionEndDwellSeconds && (!requirePauseBeforeEnd || waypointManager.IsSessionPaused))
+        {
+            waypointManager.EndSessionEarly();
+            sessionControlCooldownUntil = Time.time + sessionControlCooldownSeconds;
+            return;
+        }
+
+        if (heldSeconds >= sessionControlDwellSeconds)
+        {
+            if (waypointManager.IsSessionPaused)
+            {
+                waypointManager.ResumeSession();
+            }
+            else
+            {
+                waypointManager.PauseSession();
+            }
+
+            sessionControlCooldownUntil = Time.time + sessionControlCooldownSeconds;
+        }
+    }
+
     void UpdateStartSessionButtonPose()
     {
         if (cameraTransform == null)
@@ -633,7 +708,17 @@ public class StatsUiToggle : MonoBehaviour
 
     void SetupVoiceCommands()
     {
-        string[] keywords = { "show stats", "hide stats", "metronome", "metronome on", "metronome off" };
+        string[] keywords =
+        {
+            "show stats",
+            "hide stats",
+            "metronome",
+            "metronome on",
+            "metronome off",
+            "pause",
+            "resume",
+            "end session"
+        };
 
         keywordRecognizer = new KeywordRecognizer(keywords);
         keywordRecognizer.OnPhraseRecognized += OnPhraseRecognized;
@@ -675,6 +760,27 @@ public class StatsUiToggle : MonoBehaviour
                 if (waypointManager != null)
                 {
                     waypointManager.ToggleMetronome(false);
+                }
+                break;
+
+            case "pause":
+                if (waypointManager != null)
+                {
+                    waypointManager.PauseSession();
+                }
+                break;
+
+            case "resume":
+                if (waypointManager != null)
+                {
+                    waypointManager.ResumeSession();
+                }
+                break;
+
+            case "end session":
+                if (waypointManager != null)
+                {
+                    waypointManager.EndSessionEarly();
                 }
                 break;
         }
