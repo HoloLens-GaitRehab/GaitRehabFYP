@@ -54,6 +54,15 @@ public class StatsUiToggle : MonoBehaviour
     [Range(8f, 60f)] public float sessionControlLookUpAngle = 25f;
     [Range(0f, 2f)] public float sessionControlCooldownSeconds = 0.8f;
     public bool requirePauseBeforeEnd = true;
+    public float sessionControlBarDistance = 0.9f;
+    public float sessionControlBarVerticalOffset = 0.12f;
+    public float sessionControlBarWidth = 0.16f;
+    public float sessionControlBarHeight = 0.014f;
+    public float sessionControlBarDepth = 0.005f;
+    public Color sessionControlBarBackgroundColor = new Color(0f, 0f, 0f, 0.78f);
+    public Color sessionControlBarPauseColor = new Color(1f, 0.8f, 0.2f, 0.95f);
+    public Color sessionControlBarResumeColor = new Color(0.2f, 0.9f, 0.35f, 0.95f);
+    public Color sessionControlBarEndColor = new Color(1f, 0.3f, 0.3f, 0.95f);
 
     private GameObject canvasObj;
     private GameObject panelObj;
@@ -76,6 +85,11 @@ public class StatsUiToggle : MonoBehaviour
     private float sessionControlHoldTimer;
     private bool sessionControlWasHolding;
     private float sessionControlCooldownUntil;
+    private GameObject sessionControlBarRoot;
+    private Transform sessionControlBarFill;
+    private Renderer sessionControlBarBgRenderer;
+    private Renderer sessionControlBarFillRenderer;
+    private TextMesh sessionControlActionLabel;
     private Transform cameraTransform;
     private Vector3 followVelocity;
     private Vector3 worldOffset;
@@ -554,12 +568,114 @@ public class StatsUiToggle : MonoBehaviour
         startDwellBarFill.localPosition = new Vector3((-dwellBarWidth * 0.5f) + (fillWidth * 0.5f), 0f, -0.001f);
     }
 
+    void EnsureSessionControlDwellBar()
+    {
+        if (sessionControlBarRoot != null)
+            return;
+
+        sessionControlBarRoot = new GameObject("SessionControlProgressBar");
+
+        GameObject bgObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        bgObj.name = "SessionControlBarBackground";
+        Destroy(bgObj.GetComponent<Collider>());
+        bgObj.transform.SetParent(sessionControlBarRoot.transform, false);
+        bgObj.transform.localScale = new Vector3(sessionControlBarWidth, sessionControlBarHeight, sessionControlBarDepth);
+        sessionControlBarBgRenderer = bgObj.GetComponent<Renderer>();
+
+        GameObject fillObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        fillObj.name = "SessionControlBarFill";
+        Destroy(fillObj.GetComponent<Collider>());
+        fillObj.transform.SetParent(sessionControlBarRoot.transform, false);
+        sessionControlBarFill = fillObj.transform;
+        sessionControlBarFill.localScale = new Vector3(0.0001f, sessionControlBarHeight * 0.8f, sessionControlBarDepth * 0.8f);
+        sessionControlBarFill.localPosition = new Vector3(-sessionControlBarWidth * 0.5f, 0f, -0.001f);
+        sessionControlBarFillRenderer = fillObj.GetComponent<Renderer>();
+
+        GameObject labelObj = new GameObject("SessionControlActionLabel");
+        labelObj.transform.SetParent(sessionControlBarRoot.transform, false);
+        sessionControlActionLabel = labelObj.AddComponent<TextMesh>();
+        sessionControlActionLabel.fontSize = 48;
+        sessionControlActionLabel.characterSize = 0.007f;
+        sessionControlActionLabel.alignment = TextAlignment.Center;
+        sessionControlActionLabel.anchor = TextAnchor.LowerCenter;
+        sessionControlActionLabel.color = Color.white;
+        sessionControlActionLabel.text = "";
+        labelObj.transform.localPosition = new Vector3(0f, sessionControlBarHeight * 1.5f, -0.001f);
+
+        Shader shader = Shader.Find("Sprites/Default");
+        if (shader == null)
+        {
+            shader = Shader.Find("Unlit/Color");
+        }
+        if (shader != null)
+        {
+            if (sessionControlBarBgRenderer != null)
+            {
+                sessionControlBarBgRenderer.material = new Material(shader);
+                sessionControlBarBgRenderer.material.color = sessionControlBarBackgroundColor;
+            }
+            if (sessionControlBarFillRenderer != null)
+            {
+                sessionControlBarFillRenderer.material = new Material(shader);
+                sessionControlBarFillRenderer.material.color = sessionControlBarPauseColor;
+            }
+        }
+
+        sessionControlBarRoot.SetActive(false);
+    }
+
+    void HideSessionControlDwellBar()
+    {
+        if (sessionControlBarRoot != null)
+        {
+            sessionControlBarRoot.SetActive(false);
+        }
+    }
+
+    void UpdateSessionControlDwellBar(float progress, string actionLabel, Color fillColor)
+    {
+        EnsureSessionControlDwellBar();
+        if (sessionControlBarRoot == null || sessionControlBarFill == null || cameraTransform == null)
+            return;
+
+        sessionControlBarRoot.SetActive(true);
+
+        Vector3 targetPos = cameraTransform.position
+            + cameraTransform.forward * Mathf.Max(0.2f, sessionControlBarDistance)
+            + cameraTransform.up * sessionControlBarVerticalOffset;
+
+        Vector3 toCamera = cameraTransform.position - targetPos;
+        if (toCamera.sqrMagnitude < 0.0001f)
+        {
+            toCamera = -cameraTransform.forward;
+        }
+
+        sessionControlBarRoot.transform.position = targetPos;
+        sessionControlBarRoot.transform.rotation = Quaternion.LookRotation(-toCamera.normalized, Vector3.up);
+
+        float clampedProgress = Mathf.Clamp01(progress);
+        float fillWidth = Mathf.Max(0.0001f, sessionControlBarWidth * clampedProgress);
+        sessionControlBarFill.localScale = new Vector3(fillWidth, sessionControlBarHeight * 0.8f, sessionControlBarDepth * 0.8f);
+        sessionControlBarFill.localPosition = new Vector3((-sessionControlBarWidth * 0.5f) + (fillWidth * 0.5f), 0f, -0.001f);
+
+        if (sessionControlBarFillRenderer != null)
+        {
+            sessionControlBarFillRenderer.material.color = fillColor;
+        }
+
+        if (sessionControlActionLabel != null)
+        {
+            sessionControlActionLabel.text = actionLabel;
+        }
+    }
+
     void UpdateSessionDwellControls()
     {
         if (!useDwellSessionControls || waypointManager == null || cameraTransform == null)
         {
             sessionControlHoldTimer = 0f;
             sessionControlWasHolding = false;
+            HideSessionControlDwellBar();
             return;
         }
 
@@ -567,6 +683,7 @@ public class StatsUiToggle : MonoBehaviour
         {
             sessionControlHoldTimer = 0f;
             sessionControlWasHolding = false;
+            HideSessionControlDwellBar();
             return;
         }
 
@@ -574,6 +691,7 @@ public class StatsUiToggle : MonoBehaviour
         {
             sessionControlHoldTimer = 0f;
             sessionControlWasHolding = false;
+            HideSessionControlDwellBar();
             return;
         }
 
@@ -585,6 +703,40 @@ public class StatsUiToggle : MonoBehaviour
         {
             sessionControlHoldTimer += Time.deltaTime;
             sessionControlWasHolding = true;
+
+            float shortThreshold = Mathf.Max(0.25f, sessionControlDwellSeconds);
+            float longThreshold = Mathf.Max(shortThreshold + 0.2f, sessionEndDwellSeconds);
+            bool paused = waypointManager.IsSessionPaused;
+            bool canEnd = !requirePauseBeforeEnd || paused;
+
+            string actionLabel;
+            Color actionColor;
+            float actionProgress;
+
+            if (paused)
+            {
+                if (canEnd && sessionControlHoldTimer > shortThreshold)
+                {
+                    actionLabel = "Hold to End";
+                    actionColor = sessionControlBarEndColor;
+                    float endStageDuration = Mathf.Max(0.2f, longThreshold - shortThreshold);
+                    actionProgress = (sessionControlHoldTimer - shortThreshold) / endStageDuration;
+                }
+                else
+                {
+                    actionLabel = canEnd ? "Release to Resume" : "Resume";
+                    actionColor = sessionControlBarResumeColor;
+                    actionProgress = sessionControlHoldTimer / shortThreshold;
+                }
+            }
+            else
+            {
+                actionLabel = "Pause";
+                actionColor = sessionControlBarPauseColor;
+                actionProgress = sessionControlHoldTimer / shortThreshold;
+            }
+
+            UpdateSessionControlDwellBar(actionProgress, actionLabel, actionColor);
             return;
         }
 
@@ -594,6 +746,7 @@ public class StatsUiToggle : MonoBehaviour
         float heldSeconds = sessionControlHoldTimer;
         sessionControlHoldTimer = 0f;
         sessionControlWasHolding = false;
+        HideSessionControlDwellBar();
 
         if (heldSeconds >= sessionEndDwellSeconds && (!requirePauseBeforeEnd || waypointManager.IsSessionPaused))
         {
