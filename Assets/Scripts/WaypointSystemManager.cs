@@ -69,15 +69,7 @@ public class WaypointSystemManager : MonoBehaviour
     private float totalDistanceTraveled = 0f;
     private Vector3 lastCameraPosition;
     private MetronomeController metronomeController = new MetronomeController();
-    private GameObject straightGuideLineObject;
-    private LineRenderer straightGuideLine;
-    private GameObject leftRailObject;
-    private LineRenderer leftRailLine;
-    private GameObject rightRailObject;
-    private LineRenderer rightRailLine;
-    private Vector3 straightLineStart;
-    private Vector3 straightLineEnd;
-    private bool hasStraightLinePath = false;
+    private StraightPathGuide straightPathGuide = new StraightPathGuide();
     private OffCourseTracker offCourseTracker = new OffCourseTracker();
     private DriftArrowController driftArrowController = new DriftArrowController();
 
@@ -127,7 +119,14 @@ public class WaypointSystemManager : MonoBehaviour
         enableMetronome = true;
         metronomeController.StartOrEnable(this, GetMetronomeSettings());
 
-        SpawnStraightGuideLine();
+        straightPathGuide.StartOrUpdate(
+            playerCamera,
+            GetStraightPathGuideSettings(),
+            assumedEyeHeight,
+            offCourseTolerance,
+            driftArrowShowBuffer,
+            0f
+        );
         driftArrowController.StartOrEnable(GetDriftArrowSettings());
         if (statsText != null)
         {
@@ -176,14 +175,20 @@ public class WaypointSystemManager : MonoBehaviour
         }
 
         UpdateOffCourse(Time.deltaTime);
-        UpdateRailBrightening();
+        straightPathGuide.UpdateRailBrightening(
+            sessionActive,
+            playerCamera,
+            offCourseTolerance,
+            driftArrowShowBuffer,
+            GetCurrentOffCourseSeverity()
+        );
         driftArrowController.Update(
             GetDriftArrowSettings(),
             sessionActive,
-            hasStraightLinePath,
+            straightPathGuide.HasPath,
             playerCamera,
-            straightLineStart,
-            straightLineEnd,
+            straightPathGuide.LineStart,
+            straightPathGuide.LineEnd,
             GetCurrentOffCourseSeverity()
         );
 
@@ -220,203 +225,9 @@ public class WaypointSystemManager : MonoBehaviour
         return "";
     }
 
-    void SpawnStraightGuideLine()
-    {
-        if (playerCamera == null)
-            return;
-
-        if (straightGuideLineObject == null)
-        {
-            straightGuideLineObject = new GameObject("StraightGuideLine");
-            straightGuideLine = straightGuideLineObject.AddComponent<LineRenderer>();
-            straightGuideLine.useWorldSpace = true;
-            straightGuideLine.positionCount = 2;
-            straightGuideLine.startWidth = straightGuideLineWidth;
-            straightGuideLine.endWidth = straightGuideLineWidth;
-            straightGuideLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            straightGuideLine.receiveShadows = false;
-
-            Shader lineShader = Shader.Find("Sprites/Default");
-            if (lineShader == null)
-            {
-                lineShader = Shader.Find("Unlit/Color");
-            }
-            if (lineShader != null)
-            {
-                straightGuideLine.material = new Material(lineShader);
-                straightGuideLine.material.color = GetStraightGuideLineTint();
-            }
-        }
-
-        Color lineTint = GetStraightGuideLineTint();
-        straightGuideLine.startColor = lineTint;
-        straightGuideLine.endColor = lineTint;
-        if (straightGuideLine.material != null)
-        {
-            straightGuideLine.material.color = lineTint;
-        }
-
-        Vector3 forward = playerCamera.forward;
-        forward.y = 0f;
-        if (forward.sqrMagnitude < 0.001f)
-        {
-            forward = playerCamera.parent != null ? playerCamera.parent.forward : Vector3.forward;
-            forward.y = 0f;
-        }
-        forward.Normalize();
-
-        float floorY = playerCamera.position.y - assumedEyeHeight + straightGuideLineFloorOffset;
-        Vector3 start = new Vector3(playerCamera.position.x, floorY, playerCamera.position.z);
-        Vector3 end = start + forward * straightGuideLineLength;
-
-        straightLineStart = start;
-        straightLineEnd = end;
-        hasStraightLinePath = true;
-
-        straightGuideLine.SetPosition(0, start);
-        straightGuideLine.SetPosition(1, end);
-
-        SetupConditionalRails();
-        UpdateRailGeometry();
-        UpdateRailBrightening();
-    }
-
-    Color GetStraightGuideLineTint()
-    {
-        Color tint = straightGuideLineColor;
-        tint.a = Mathf.Clamp01(straightGuideLineAlpha);
-        return tint;
-    }
-
-    void SetupConditionalRails()
-    {
-        if (!enableConditionalRails)
-        {
-            if (leftRailObject != null) leftRailObject.SetActive(false);
-            if (rightRailObject != null) rightRailObject.SetActive(false);
-            return;
-        }
-
-        if (leftRailObject == null)
-        {
-            leftRailObject = new GameObject("LeftGuideRail");
-            leftRailLine = leftRailObject.AddComponent<LineRenderer>();
-            ConfigureGuideLineRenderer(leftRailLine, railWidth);
-        }
-
-        if (rightRailObject == null)
-        {
-            rightRailObject = new GameObject("RightGuideRail");
-            rightRailLine = rightRailObject.AddComponent<LineRenderer>();
-            ConfigureGuideLineRenderer(rightRailLine, railWidth);
-        }
-
-        leftRailObject.SetActive(true);
-        rightRailObject.SetActive(true);
-    }
-
-    void ConfigureGuideLineRenderer(LineRenderer line, float width)
-    {
-        line.useWorldSpace = true;
-        line.positionCount = 2;
-        line.startWidth = width;
-        line.endWidth = width;
-        line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        line.receiveShadows = false;
-
-        Shader lineShader = Shader.Find("Sprites/Default");
-        if (lineShader == null)
-        {
-            lineShader = Shader.Find("Unlit/Color");
-        }
-        if (lineShader != null)
-        {
-            line.material = new Material(lineShader);
-        }
-    }
-
-    void UpdateRailGeometry()
-    {
-        if (!enableConditionalRails || !hasStraightLinePath || leftRailLine == null || rightRailLine == null)
-            return;
-
-        Vector3 pathDir = straightLineEnd - straightLineStart;
-        pathDir.y = 0f;
-        if (pathDir.sqrMagnitude < 0.0001f)
-            return;
-
-        pathDir.Normalize();
-        Vector3 right = Vector3.Cross(Vector3.up, pathDir).normalized;
-        float offset = Mathf.Max(0.05f, railSpacing * 0.5f);
-        if (railsFollowOffCourseBoundary)
-        {
-            float boundaryOffset = Mathf.Max(0.05f, Mathf.Max(0.1f, offCourseTolerance) + Mathf.Max(0f, driftArrowShowBuffer));
-            offset = Mathf.Max(offset, boundaryOffset);
-        }
-
-        Vector3 leftStart = straightLineStart - right * offset;
-        Vector3 leftEnd = straightLineEnd - right * offset;
-        Vector3 rightStart = straightLineStart + right * offset;
-        Vector3 rightEnd = straightLineEnd + right * offset;
-
-        leftRailLine.startWidth = railWidth;
-        leftRailLine.endWidth = railWidth;
-        rightRailLine.startWidth = railWidth;
-        rightRailLine.endWidth = railWidth;
-
-        leftRailLine.SetPosition(0, leftStart);
-        leftRailLine.SetPosition(1, leftEnd);
-        rightRailLine.SetPosition(0, rightStart);
-        rightRailLine.SetPosition(1, rightEnd);
-    }
-
-    void UpdateRailBrightening()
-    {
-        if (!enableConditionalRails || leftRailLine == null || rightRailLine == null)
-            return;
-
-        float triggerDistance = Mathf.Max(0.1f, offCourseTolerance) + Mathf.Max(0f, driftArrowShowBuffer);
-        float currentDistance = hasStraightLinePath && playerCamera != null
-            ? Mathf.Abs(OffCourseTracker.SignedDistanceToInfiniteLineXZ(playerCamera.position, straightLineStart, straightLineEnd))
-            : 0f;
-
-        bool shouldShowRails = sessionActive && currentDistance > triggerDistance;
-        if (leftRailObject != null)
-        {
-            leftRailObject.SetActive(shouldShowRails);
-        }
-        if (rightRailObject != null)
-        {
-            rightRailObject.SetActive(shouldShowRails);
-        }
-
-        if (!shouldShowRails)
-            return;
-
-        float severity = GetCurrentOffCourseSeverity();
-        float alpha = Mathf.Lerp(Mathf.Clamp01(railBaseAlpha), Mathf.Clamp01(railMaxAlpha), severity);
-
-        Color railTint = straightGuideLineColor;
-        railTint.a = alpha;
-
-        leftRailLine.startColor = railTint;
-        leftRailLine.endColor = railTint;
-        rightRailLine.startColor = railTint;
-        rightRailLine.endColor = railTint;
-
-        if (leftRailLine.material != null)
-        {
-            leftRailLine.material.color = railTint;
-        }
-        if (rightRailLine.material != null)
-        {
-            rightRailLine.material.color = railTint;
-        }
-    }
-
     void UpdateOffCourse(float deltaTime)
     {
-        if (!hasStraightLinePath || deltaTime <= 0f || playerCamera == null)
+        if (!straightPathGuide.HasPath || deltaTime <= 0f || playerCamera == null)
             return;
 
         offCourseTracker.Update(
@@ -425,8 +236,8 @@ public class WaypointSystemManager : MonoBehaviour
             offCourseTolerance,
             sessionStartTime,
             playerCamera.position,
-            straightLineStart,
-            straightLineEnd,
+            straightPathGuide.LineStart,
+            straightPathGuide.LineEnd,
             Time.time
         );
 
@@ -435,11 +246,11 @@ public class WaypointSystemManager : MonoBehaviour
 
     bool HasReachedLineEnd()
     {
-        if (!hasStraightLinePath || playerCamera == null)
+        if (!straightPathGuide.HasPath || playerCamera == null)
             return false;
 
-        Vector2 start = new Vector2(straightLineStart.x, straightLineStart.z);
-        Vector2 end = new Vector2(straightLineEnd.x, straightLineEnd.z);
+        Vector2 start = new Vector2(straightPathGuide.LineStart.x, straightPathGuide.LineStart.z);
+        Vector2 end = new Vector2(straightPathGuide.LineEnd.x, straightPathGuide.LineEnd.z);
         Vector2 current = new Vector2(playerCamera.position.x, playerCamera.position.z);
         Vector2 path = end - start;
 
@@ -485,21 +296,14 @@ public class WaypointSystemManager : MonoBehaviour
 
         metronomeController.SetEnabled(false, showMetronomeArc);
         driftArrowController.SetEnabled(false);
-        if (leftRailObject != null)
-        {
-            leftRailObject.SetActive(false);
-        }
-        if (rightRailObject != null)
-        {
-            rightRailObject.SetActive(false);
-        }
+        straightPathGuide.SetRailsEnabled(false);
 
         Debug.Log("Session completed at end of straight line.");
     }
     
     float GetCurrentOffCourseSeverity()
     {
-        if (!trackOffCourse || !hasStraightLinePath || playerCamera == null)
+        if (!trackOffCourse || !straightPathGuide.HasPath || playerCamera == null)
             return 0f;
 
         return offCourseTracker.GetSeverity(offCourseTolerance, metronomeRedShiftDistance);
@@ -537,6 +341,24 @@ public class WaypointSystemManager : MonoBehaviour
             driftArrowScale = driftArrowScale,
             driftArrowBaseColor = driftArrowBaseColor,
             offCourseTolerance = offCourseTolerance
+        };
+    }
+
+    StraightPathGuide.Settings GetStraightPathGuideSettings()
+    {
+        return new StraightPathGuide.Settings
+        {
+            straightGuideLineColor = straightGuideLineColor,
+            straightGuideLineAlpha = straightGuideLineAlpha,
+            straightGuideLineWidth = straightGuideLineWidth,
+            straightGuideLineLength = straightGuideLineLength,
+            straightGuideLineFloorOffset = straightGuideLineFloorOffset,
+            enableConditionalRails = enableConditionalRails,
+            railSpacing = railSpacing,
+            railWidth = railWidth,
+            railBaseAlpha = railBaseAlpha,
+            railMaxAlpha = railMaxAlpha,
+            railsFollowOffCourseBoundary = railsFollowOffCourseBoundary
         };
     }
 
