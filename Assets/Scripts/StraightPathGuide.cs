@@ -10,6 +10,11 @@ public class StraightPathGuide
         public float straightGuideLineLength;
         public float straightGuideLineFloorOffset;
 
+        public bool enableLineEndMarker;
+        public Color lineEndMarkerColor;
+        public float lineEndMarkerHeight;
+        public float lineEndMarkerWidth;
+
         public bool enableConditionalRails;
         public float railSpacing;
         public float railWidth;
@@ -28,6 +33,8 @@ public class StraightPathGuide
     private LineRenderer leftRailLine;
     private GameObject rightRailObject;
     private LineRenderer rightRailLine;
+    private GameObject lineEndMarkerObject;
+    private LineRenderer lineEndMarkerLine;
 
     public void StartOrUpdate(
         Transform playerCamera,
@@ -69,6 +76,8 @@ public class StraightPathGuide
 
         straightGuideLine.SetPosition(0, start);
         straightGuideLine.SetPosition(1, end);
+
+        UpdateEndMarker(settings);
 
         SetupConditionalRails(settings);
         UpdateRailGeometry(settings, offCourseTolerance, driftArrowShowBuffer);
@@ -194,6 +203,66 @@ public class StraightPathGuide
 
         leftRailObject.SetActive(true);
         rightRailObject.SetActive(true);
+    }
+
+    private void UpdateEndMarker(Settings settings)
+    {
+        if (!settings.enableLineEndMarker)
+        {
+            if (lineEndMarkerObject != null)
+            {
+                lineEndMarkerObject.SetActive(false);
+            }
+            return;
+        }
+
+        if (!HasPath)
+            return;
+
+        if (lineEndMarkerObject == null)
+        {
+            lineEndMarkerObject = new GameObject("LineEndMarker");
+            lineEndMarkerLine = lineEndMarkerObject.AddComponent<LineRenderer>();
+            lineEndMarkerLine.useWorldSpace = true;
+            lineEndMarkerLine.positionCount = 2;
+            lineEndMarkerLine.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            lineEndMarkerLine.receiveShadows = false;
+
+            Shader markerShader = Shader.Find("Sprites/Default");
+            if (markerShader == null)
+            {
+                markerShader = Shader.Find("Unlit/Color");
+            }
+            if (markerShader != null)
+            {
+                lineEndMarkerLine.material = new Material(markerShader);
+            }
+        }
+
+        if (lineEndMarkerObject != null)
+        {
+            lineEndMarkerObject.SetActive(true);
+        }
+
+        float markerWidth = Mathf.Max(0.015f, settings.lineEndMarkerWidth);
+        float markerHeight = Mathf.Max(0.3f, settings.lineEndMarkerHeight);
+
+        Vector3 markerStart = LineEnd;
+        Vector3 markerTop = LineEnd + Vector3.up * markerHeight;
+
+        lineEndMarkerLine.startWidth = markerWidth;
+        lineEndMarkerLine.endWidth = markerWidth * 0.8f;
+        lineEndMarkerLine.SetPosition(0, markerStart);
+        lineEndMarkerLine.SetPosition(1, markerTop);
+
+        Color markerTint = settings.lineEndMarkerColor;
+        lineEndMarkerLine.startColor = markerTint;
+        lineEndMarkerLine.endColor = markerTint;
+
+        if (lineEndMarkerLine.material != null)
+        {
+            lineEndMarkerLine.material.color = markerTint;
+        }
     }
 
     private void ConfigureGuideLineRenderer(LineRenderer line, float width)

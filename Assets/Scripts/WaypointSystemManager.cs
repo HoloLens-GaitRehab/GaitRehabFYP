@@ -41,6 +41,12 @@ public class WaypointSystemManager : MonoBehaviour
     public float straightGuideLineFloorOffset = 0.02f;
     public float assumedEyeHeight = 1.6f;
 
+    [Header("Line End Marker")]
+    public bool enableLineEndMarker = true;
+    public Color lineEndMarkerColor = new Color(1f, 0.95f, 0.2f, 0.95f);
+    public float lineEndMarkerHeight = 1.35f;
+    public float lineEndMarkerWidth = 0.055f;
+
     [Header("Conditional Rails")]
     public bool enableConditionalRails = true;
     public float railSpacing = 0.45f;
@@ -348,6 +354,10 @@ public class WaypointSystemManager : MonoBehaviour
             straightGuideLineWidth = straightGuideLineWidth,
             straightGuideLineLength = straightGuideLineLength,
             straightGuideLineFloorOffset = straightGuideLineFloorOffset,
+            enableLineEndMarker = enableLineEndMarker,
+            lineEndMarkerColor = lineEndMarkerColor,
+            lineEndMarkerHeight = lineEndMarkerHeight,
+            lineEndMarkerWidth = lineEndMarkerWidth,
             enableConditionalRails = enableConditionalRails,
             railSpacing = railSpacing,
             railWidth = railWidth,
