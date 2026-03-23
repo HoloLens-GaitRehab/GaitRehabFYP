@@ -79,9 +79,7 @@ public class WaypointSystemManager : MonoBehaviour
     private Vector3 straightLineEnd;
     private bool hasStraightLinePath = false;
     private OffCourseTracker offCourseTracker = new OffCourseTracker();
-    private GameObject driftArrowObject;
-    private TextMesh driftArrowText;
-    private Renderer driftArrowRenderer;
+    private DriftArrowController driftArrowController = new DriftArrowController();
 
     public float CurrentOffCoursePercent { get; private set; }
     
@@ -130,7 +128,7 @@ public class WaypointSystemManager : MonoBehaviour
         metronomeController.StartOrEnable(this, GetMetronomeSettings());
 
         SpawnStraightGuideLine();
-        SetupDriftDirectionArrow();
+        driftArrowController.StartOrEnable(GetDriftArrowSettings());
         if (statsText != null)
         {
             statsText.text = "";
@@ -179,7 +177,15 @@ public class WaypointSystemManager : MonoBehaviour
 
         UpdateOffCourse(Time.deltaTime);
         UpdateRailBrightening();
-        UpdateDriftDirectionArrow();
+        driftArrowController.Update(
+            GetDriftArrowSettings(),
+            sessionActive,
+            hasStraightLinePath,
+            playerCamera,
+            straightLineStart,
+            straightLineEnd,
+            GetCurrentOffCourseSeverity()
+        );
 
         if (HasReachedLineEnd())
         {
@@ -427,79 +433,6 @@ public class WaypointSystemManager : MonoBehaviour
         CurrentOffCoursePercent = offCourseTracker.CurrentOffCoursePercent;
     }
 
-    void SetupDriftDirectionArrow()
-    {
-        if (!enableDriftDirectionArrow)
-            return;
-
-        if (driftArrowObject == null)
-        {
-            driftArrowObject = new GameObject("DriftDirectionArrow");
-            driftArrowText = driftArrowObject.AddComponent<TextMesh>();
-            driftArrowText.text = "←";
-            driftArrowText.fontSize = 96;
-            driftArrowText.anchor = TextAnchor.MiddleCenter;
-            driftArrowText.alignment = TextAlignment.Center;
-            driftArrowText.color = driftArrowBaseColor;
-
-            driftArrowRenderer = driftArrowObject.GetComponent<Renderer>();
-        }
-
-        driftArrowObject.transform.localScale = Vector3.one * Mathf.Max(0.005f, driftArrowScale);
-        driftArrowObject.SetActive(false);
-    }
-
-    void UpdateDriftDirectionArrow()
-    {
-        if (driftArrowObject == null)
-        {
-            SetupDriftDirectionArrow();
-        }
-
-        if (!enableDriftDirectionArrow || !sessionActive || !hasStraightLinePath || playerCamera == null || driftArrowObject == null || driftArrowText == null)
-        {
-            if (driftArrowObject != null)
-            {
-                driftArrowObject.SetActive(false);
-            }
-            return;
-        }
-
-        float tolerance = Mathf.Max(0.1f, offCourseTolerance) + Mathf.Max(0f, driftArrowShowBuffer);
-        float signedLateralDistance = OffCourseTracker.SignedDistanceToInfiniteLineXZ(playerCamera.position, straightLineStart, straightLineEnd);
-        float absDistance = Mathf.Abs(signedLateralDistance);
-
-        if (absDistance <= tolerance)
-        {
-            driftArrowObject.SetActive(false);
-            return;
-        }
-
-        // Reversed mapping: positive signed distance now shows right arrow.
-        driftArrowText.text = signedLateralDistance > 0f ? "→" : "←";
-
-        float severity = GetCurrentOffCourseSeverity();
-        Color arrowColor = Color.Lerp(driftArrowBaseColor, Color.red, severity);
-        driftArrowText.color = arrowColor;
-        if (driftArrowRenderer != null)
-        {
-            driftArrowRenderer.material.color = arrowColor;
-        }
-
-        Vector3 arrowPos = playerCamera.position
-                           + playerCamera.forward * driftArrowDistance
-                           + playerCamera.up * driftArrowVerticalOffset;
-        driftArrowObject.transform.position = arrowPos;
-
-        Vector3 toCamera = playerCamera.position - arrowPos;
-        if (toCamera.sqrMagnitude < 0.0001f)
-        {
-            toCamera = -playerCamera.forward;
-        }
-        driftArrowObject.transform.rotation = Quaternion.LookRotation(toCamera.normalized, Vector3.up);
-        driftArrowObject.SetActive(true);
-    }
-
     bool HasReachedLineEnd()
     {
         if (!hasStraightLinePath || playerCamera == null)
@@ -551,10 +484,7 @@ public class WaypointSystemManager : MonoBehaviour
         }
 
         metronomeController.SetEnabled(false, showMetronomeArc);
-        if (driftArrowObject != null)
-        {
-            driftArrowObject.SetActive(false);
-        }
+        driftArrowController.SetEnabled(false);
         if (leftRailObject != null)
         {
             leftRailObject.SetActive(false);
@@ -593,6 +523,20 @@ public class WaypointSystemManager : MonoBehaviour
             useGeneratedTickFallback = useGeneratedTickFallback,
             generatedTickFrequencyHz = generatedTickFrequencyHz,
             generatedTickDurationSeconds = generatedTickDurationSeconds
+        };
+    }
+
+    DriftArrowController.Settings GetDriftArrowSettings()
+    {
+        return new DriftArrowController.Settings
+        {
+            enableDriftDirectionArrow = enableDriftDirectionArrow,
+            driftArrowShowBuffer = driftArrowShowBuffer,
+            driftArrowDistance = driftArrowDistance,
+            driftArrowVerticalOffset = driftArrowVerticalOffset,
+            driftArrowScale = driftArrowScale,
+            driftArrowBaseColor = driftArrowBaseColor,
+            offCourseTolerance = offCourseTolerance
         };
     }
 
