@@ -19,11 +19,10 @@ public class OffCourseTracker
         float deltaTime,
         bool trackOffCourse,
         float offCourseTolerance,
-        float sessionStartTime,
+        float effectiveElapsedTime,
         Vector3 playerPosition,
         Vector3 lineStart,
-        Vector3 lineEnd,
-        float currentTime)
+        Vector3 lineEnd)
     {
         if (deltaTime <= 0f)
             return;
@@ -39,7 +38,7 @@ public class OffCourseTracker
                 OffCourseTimeSeconds += deltaTime;
             }
 
-            float elapsedTime = Mathf.Max(0.001f, currentTime - sessionStartTime);
+            float elapsedTime = Mathf.Max(0.001f, effectiveElapsedTime);
             CurrentOffCoursePercent = (OffCourseTimeSeconds / elapsedTime) * 100f;
         }
         else

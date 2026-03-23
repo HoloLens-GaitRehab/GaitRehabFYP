@@ -71,6 +71,7 @@ public class WaypointSystemManager : MonoBehaviour
     public float CurrentOffCoursePercent { get; private set; }
     public bool IsSessionActive => sessionController.IsActive;
     public bool IsSessionCompleted => sessionController.IsCompleted;
+    public bool IsSessionPaused => sessionController.IsPaused;
     
     void Start()
     {
@@ -156,6 +157,12 @@ public class WaypointSystemManager : MonoBehaviour
             return;
         
         sessionController.UpdateDistance(playerCamera.position);
+
+        if (sessionController.IsPaused)
+        {
+            UpdateStats();
+            return;
+        }
         
         // Update metronome
         if (enableMetronome)
@@ -220,11 +227,10 @@ public class WaypointSystemManager : MonoBehaviour
             deltaTime,
             trackOffCourse,
             offCourseTolerance,
-            sessionController.SessionStartTime,
+            sessionController.GetEffectiveElapsedTime(Time.time),
             playerCamera.position,
             straightPathGuide.LineStart,
-            straightPathGuide.LineEnd,
-            Time.time
+            straightPathGuide.LineEnd
         );
 
         CurrentOffCoursePercent = offCourseTracker.CurrentOffCoursePercent;
@@ -232,13 +238,19 @@ public class WaypointSystemManager : MonoBehaviour
 
     void CompleteSession()
     {
+        CompleteSession("Session complete!");
+    }
+
+    void CompleteSession(string completionTitle)
+    {
         if (!sessionController.IsActive)
             return;
 
         sessionController.Complete(
             Time.time,
             CurrentOffCoursePercent,
-            offCourseTracker.OffCourseTimeSeconds
+            offCourseTracker.OffCourseTimeSeconds,
+            completionTitle
         );
 
         if (statsText != null)
@@ -251,6 +263,37 @@ public class WaypointSystemManager : MonoBehaviour
         straightPathGuide.SetRailsEnabled(false);
 
         Debug.Log("Session completed at end of straight line.");
+    }
+
+    public void PauseSession()
+    {
+        if (!sessionController.Pause(Time.time))
+            return;
+
+        metronomeController.SetEnabled(false, showMetronomeArc);
+        driftArrowController.SetEnabled(false);
+        straightPathGuide.SetRailsEnabled(false);
+
+        Debug.Log("Session paused.");
+    }
+
+    public void ResumeSession()
+    {
+        if (playerCamera == null)
+            return;
+
+        if (!sessionController.Resume(Time.time, playerCamera.position))
+            return;
+
+        metronomeController.SetEnabled(enableMetronome, showMetronomeArc);
+        driftArrowController.SetEnabled(enableDriftDirectionArrow);
+
+        Debug.Log("Session resumed.");
+    }
+
+    public void EndSessionEarly()
+    {
+        CompleteSession("Session ended early.");
     }
     
     float GetCurrentOffCourseSeverity()
@@ -324,7 +367,7 @@ public class WaypointSystemManager : MonoBehaviour
             return;
         }
 
-        if (sessionController.IsActive)
+        if (sessionController.IsActive && !sessionController.IsPaused)
         {
             metronomeController.StartOrEnable(this, GetMetronomeSettings());
         }
