@@ -27,6 +27,11 @@ public class WaypointSystemManager : MonoBehaviour
     public float metronomeArcWidth = 0.01f;
     public int metronomeArcSegments = 24;
     public float metronomeRedShiftDistance = 1.0f;
+    public AudioClip metronomeTickClip;
+    [Range(0f, 1f)] public float metronomeTickVolume = 0.2f;
+    public bool useGeneratedTickFallback = true;
+    public float generatedTickFrequencyHz = 1300f;
+    public float generatedTickDurationSeconds = 0.03f;
 
     [Header("Straight Guide Line")]
     public Color straightGuideLineColor = Color.green;
@@ -65,7 +70,14 @@ public class WaypointSystemManager : MonoBehaviour
     private Vector3 lastCameraPosition;
     private GameObject metronomeObject;
     private Renderer metronomeRenderer;
+    private AudioSource metronomeAudioSource;
+    private AudioClip generatedMetronomeTickClip;
+    private float generatedTickFrequencyCached = -1f;
+    private float generatedTickDurationCached = -1f;
     private float metronomeBeatTime;
+    private float previousMetronomeAngle;
+    private bool hasPreviousMetronomeAngle;
+    private float lastMetronomeTickTime = -10f;
     private GameObject metronomeArcObject;
     private LineRenderer metronomeArcLine;
     private GameObject straightGuideLineObject;
@@ -123,6 +135,8 @@ public class WaypointSystemManager : MonoBehaviour
         CurrentOffCoursePercent = 0f;
         offCourseTimeSeconds = 0f;
         lastCameraPosition = playerCamera.position;
+        hasPreviousMetronomeAngle = false;
+        lastMetronomeTickTime = -10f;
 
         // Always spawn/show metronome when session starts
         enableMetronome = true;
@@ -639,6 +653,18 @@ public class WaypointSystemManager : MonoBehaviour
         
         metronomeObject.name = "Metronome";
         metronomeRenderer = metronomeObject.GetComponent<Renderer>();
+
+        if (metronomeAudioSource == null)
+        {
+            metronomeAudioSource = gameObject.GetComponent<AudioSource>();
+            if (metronomeAudioSource == null)
+            {
+                metronomeAudioSource = gameObject.AddComponent<AudioSource>();
+            }
+        }
+        metronomeAudioSource.playOnAwake = false;
+        metronomeAudioSource.spatialBlend = 0f;
+        metronomeAudioSource.loop = false;
         
         if (metronomeRenderer != null)
         {
@@ -667,6 +693,7 @@ public class WaypointSystemManager : MonoBehaviour
         float beatProgress = (Time.time % metronomeBeatTime) / metronomeBeatTime;
         beatProgress = (beatProgress + 0.5f) % 1f; // invert phase (opposite direction)
         float angle = Mathf.Sin(beatProgress * Mathf.PI * 2f) * 45f;  // ±45 degrees swing (reduced from 60)
+        TryPlayMetronomeCenterTick(angle);
         
         // Convert angle to radians
         float angleRad = angle * Mathf.Deg2Rad;
@@ -716,6 +743,83 @@ public class WaypointSystemManager : MonoBehaviour
             float intensity = Mathf.Abs(angle) > 35f ? 3f : 1.5f;
             metronomeRenderer.material.SetColor("_EmissionColor", currentMetronomeColor * intensity);
         }
+    }
+
+    void TryPlayMetronomeCenterTick(float currentAngle)
+    {
+        AudioClip tickClip = GetMetronomeTickClip();
+        if (tickClip == null || metronomeAudioSource == null)
+        {
+            previousMetronomeAngle = currentAngle;
+            hasPreviousMetronomeAngle = true;
+            return;
+        }
+
+        if (!hasPreviousMetronomeAngle)
+        {
+            previousMetronomeAngle = currentAngle;
+            hasPreviousMetronomeAngle = true;
+            return;
+        }
+
+        bool crossedCenter = (previousMetronomeAngle < 0f && currentAngle >= 0f)
+                             || (previousMetronomeAngle > 0f && currentAngle <= 0f);
+
+        float minTickInterval = Mathf.Max(0.08f, metronomeBeatTime * 0.2f);
+        bool canTick = Time.time - lastMetronomeTickTime >= minTickInterval;
+
+        if (crossedCenter && canTick)
+        {
+            metronomeAudioSource.PlayOneShot(tickClip, metronomeTickVolume);
+            lastMetronomeTickTime = Time.time;
+        }
+
+        previousMetronomeAngle = currentAngle;
+    }
+
+    AudioClip GetMetronomeTickClip()
+    {
+        if (metronomeTickClip != null)
+        {
+            return metronomeTickClip;
+        }
+
+        if (!useGeneratedTickFallback)
+        {
+            return null;
+        }
+
+        float safeFrequency = Mathf.Clamp(generatedTickFrequencyHz, 300f, 5000f);
+        float safeDuration = Mathf.Clamp(generatedTickDurationSeconds, 0.01f, 0.2f);
+
+        if (generatedMetronomeTickClip == null
+            || !Mathf.Approximately(generatedTickFrequencyCached, safeFrequency)
+            || !Mathf.Approximately(generatedTickDurationCached, safeDuration))
+        {
+            generatedTickFrequencyCached = safeFrequency;
+            generatedTickDurationCached = safeDuration;
+            generatedMetronomeTickClip = BuildGeneratedTickClip(safeFrequency, safeDuration);
+        }
+
+        return generatedMetronomeTickClip;
+    }
+
+    AudioClip BuildGeneratedTickClip(float frequencyHz, float durationSeconds)
+    {
+        const int sampleRate = 44100;
+        int sampleCount = Mathf.Max(1, Mathf.RoundToInt(sampleRate * durationSeconds));
+        float[] samples = new float[sampleCount];
+
+        for (int i = 0; i < sampleCount; i++)
+        {
+            float t = i / (float)sampleRate;
+            float envelope = 1f - (i / (float)sampleCount);
+            samples[i] = Mathf.Sin(2f * Mathf.PI * frequencyHz * t) * envelope * 0.35f;
+        }
+
+        AudioClip clip = AudioClip.Create("GeneratedMetronomeTick", sampleCount, 1, sampleRate, false);
+        clip.SetData(samples, 0);
+        return clip;
     }
 
     float GetCurrentOffCourseSeverity()
