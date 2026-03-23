@@ -69,6 +69,8 @@ public class WaypointSystemManager : MonoBehaviour
     private DriftArrowController driftArrowController = new DriftArrowController();
 
     public float CurrentOffCoursePercent { get; private set; }
+    public bool IsSessionActive => sessionController.IsActive;
+    public bool IsSessionCompleted => sessionController.IsCompleted;
     
     void Start()
     {

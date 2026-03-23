@@ -64,6 +64,7 @@ public class StatsUiToggle : MonoBehaviour
     private Renderer startDwellBarFillRenderer;
     private float startDwellTimer;
     private bool startTriggered;
+    private bool waitingForNextSession;
     private Transform cameraTransform;
     private Vector3 followVelocity;
     private Vector3 worldOffset;
@@ -195,6 +196,7 @@ public class StatsUiToggle : MonoBehaviour
 
     void Update()
     {
+        UpdateStartButtonSessionCycle();
         UpdateStartDwellActivation();
 
         if (panelObj == null || panelText == null)
@@ -482,6 +484,50 @@ public class StatsUiToggle : MonoBehaviour
         }
     }
 
+    void UpdateStartButtonSessionCycle()
+    {
+        if (!showStartSessionButton || waypointManager == null)
+            return;
+
+        if (waypointManager.IsSessionActive)
+        {
+            waitingForNextSession = true;
+            return;
+        }
+
+        if (waypointManager.IsSessionCompleted && waitingForNextSession)
+        {
+            if (startSessionButton == null && startSessionFallbackButton == null)
+            {
+                TryCreateStartSessionButton();
+            }
+
+            if (startSessionButton != null)
+            {
+                startSessionButton.SetActive(true);
+                SetMrtkButtonLabel(startSessionButton, useDwellStart ? "Look & Hold" : "Start");
+            }
+
+            if (startSessionFallbackCanvas != null)
+            {
+                startSessionFallbackCanvas.SetActive(true);
+            }
+            else if (startSessionFallbackButton != null)
+            {
+                startSessionFallbackButton.gameObject.SetActive(true);
+            }
+
+            startTriggered = false;
+            startDwellTimer = 0f;
+            if (startDwellBarRoot != null)
+            {
+                startDwellBarRoot.SetActive(false);
+            }
+
+            waitingForNextSession = false;
+        }
+    }
+
     void UpdateDwellBarVisual(Transform target, float progress)
     {
         if (startDwellBarRoot == null || startDwellBarFill == null)
@@ -555,6 +601,8 @@ public class StatsUiToggle : MonoBehaviour
 
     void OnStartSessionPressed()
     {
+        startTriggered = true;
+
         if (waypointManager != null)
         {
             waypointManager.StartSessionFromButton();
