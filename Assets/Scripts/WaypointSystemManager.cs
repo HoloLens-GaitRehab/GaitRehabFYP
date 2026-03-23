@@ -89,7 +89,7 @@ public class WaypointSystemManager : MonoBehaviour
     private Vector3 straightLineStart;
     private Vector3 straightLineEnd;
     private bool hasStraightLinePath = false;
-    private float offCourseTimeSeconds;
+    private OffCourseTracker offCourseTracker = new OffCourseTracker();
     private GameObject driftArrowObject;
     private TextMesh driftArrowText;
     private Renderer driftArrowRenderer;
@@ -132,8 +132,8 @@ public class WaypointSystemManager : MonoBehaviour
         finalSessionStats = "";
         sessionStartTime = Time.time;
         totalDistanceTraveled = 0f;
+        offCourseTracker.Reset();
         CurrentOffCoursePercent = 0f;
-        offCourseTimeSeconds = 0f;
         lastCameraPosition = playerCamera.position;
         hasPreviousMetronomeAngle = false;
         lastMetronomeTickTime = -10f;
@@ -395,7 +395,7 @@ public class WaypointSystemManager : MonoBehaviour
 
         float triggerDistance = Mathf.Max(0.1f, offCourseTolerance) + Mathf.Max(0f, driftArrowShowBuffer);
         float currentDistance = hasStraightLinePath && playerCamera != null
-            ? Mathf.Abs(SignedDistanceToInfiniteLineXZ(playerCamera.position, straightLineStart, straightLineEnd))
+            ? Mathf.Abs(OffCourseTracker.SignedDistanceToInfiniteLineXZ(playerCamera.position, straightLineStart, straightLineEnd))
             : 0f;
 
         bool shouldShowRails = sessionActive && currentDistance > triggerDistance;
@@ -434,23 +434,21 @@ public class WaypointSystemManager : MonoBehaviour
 
     void UpdateOffCourse(float deltaTime)
     {
-        if (!trackOffCourse || !hasStraightLinePath || deltaTime <= 0f || playerCamera == null)
+        if (!hasStraightLinePath || deltaTime <= 0f || playerCamera == null)
             return;
 
-        float clampedTolerance = Mathf.Max(0.1f, offCourseTolerance);
+        offCourseTracker.Update(
+            deltaTime,
+            trackOffCourse,
+            offCourseTolerance,
+            sessionStartTime,
+            playerCamera.position,
+            straightLineStart,
+            straightLineEnd,
+            Time.time
+        );
 
-        float lateralDistance = DistanceToInfiniteLineXZ(playerCamera.position, straightLineStart, straightLineEnd);
-        bool isOffCourse = lateralDistance > clampedTolerance;
-        if (isOffCourse)
-        {
-            offCourseTimeSeconds += deltaTime;
-        }
-
-        float elapsedTime = Mathf.Max(0.001f, Time.time - sessionStartTime);
-        if (elapsedTime > 0f)
-        {
-            CurrentOffCoursePercent = (offCourseTimeSeconds / elapsedTime) * 100f;
-        }
+        CurrentOffCoursePercent = offCourseTracker.CurrentOffCoursePercent;
     }
 
     void SetupDriftDirectionArrow()
@@ -492,7 +490,7 @@ public class WaypointSystemManager : MonoBehaviour
         }
 
         float tolerance = Mathf.Max(0.1f, offCourseTolerance) + Mathf.Max(0f, driftArrowShowBuffer);
-        float signedLateralDistance = SignedDistanceToInfiniteLineXZ(playerCamera.position, straightLineStart, straightLineEnd);
+        float signedLateralDistance = OffCourseTracker.SignedDistanceToInfiniteLineXZ(playerCamera.position, straightLineStart, straightLineEnd);
         float absDistance = Mathf.Abs(signedLateralDistance);
 
         if (absDistance <= tolerance)
@@ -524,41 +522,6 @@ public class WaypointSystemManager : MonoBehaviour
         }
         driftArrowObject.transform.rotation = Quaternion.LookRotation(toCamera.normalized, Vector3.up);
         driftArrowObject.SetActive(true);
-    }
-
-    float DistanceToInfiniteLineXZ(Vector3 point, Vector3 lineStart, Vector3 lineEnd)
-    {
-        Vector2 p = new Vector2(point.x, point.z);
-        Vector2 a = new Vector2(lineStart.x, lineStart.z);
-        Vector2 b = new Vector2(lineEnd.x, lineEnd.z);
-        Vector2 ab = b - a;
-        float abSqr = ab.sqrMagnitude;
-
-        if (abSqr < 0.0001f)
-        {
-            return Vector2.Distance(p, a);
-        }
-
-        float t = Vector2.Dot(p - a, ab) / abSqr;
-        Vector2 nearest = a + ab * t;
-        return Vector2.Distance(p, nearest);
-    }
-
-    float SignedDistanceToInfiniteLineXZ(Vector3 point, Vector3 lineStart, Vector3 lineEnd)
-    {
-        Vector2 p = new Vector2(point.x, point.z);
-        Vector2 a = new Vector2(lineStart.x, lineStart.z);
-        Vector2 b = new Vector2(lineEnd.x, lineEnd.z);
-        Vector2 ab = b - a;
-        float abMagnitude = ab.magnitude;
-        if (abMagnitude < 0.0001f)
-        {
-            return 0f;
-        }
-
-        Vector2 dir = ab / abMagnitude;
-        Vector2 rightNormal = new Vector2(dir.y, -dir.x);
-        return Vector2.Dot(p - a, rightNormal);
     }
 
     bool HasReachedLineEnd()
@@ -601,7 +564,7 @@ public class WaypointSystemManager : MonoBehaviour
             "Session complete!\nDistance: {0:F1}m\nOff-course: {1:F0}% ({2:F1}s)\nTime: {3:00}:{4:00}",
             totalDistanceTraveled,
             CurrentOffCoursePercent,
-            offCourseTimeSeconds,
+            offCourseTracker.OffCourseTimeSeconds,
             minutes,
             seconds
         );
@@ -827,11 +790,7 @@ public class WaypointSystemManager : MonoBehaviour
         if (!trackOffCourse || !hasStraightLinePath || playerCamera == null)
             return 0f;
 
-        float lateralDistance = DistanceToInfiniteLineXZ(playerCamera.position, straightLineStart, straightLineEnd);
-        float clampedTolerance = Mathf.Max(0.1f, offCourseTolerance);
-        float redShiftDistance = Mathf.Max(clampedTolerance + 0.05f, metronomeRedShiftDistance);
-        float excess = Mathf.Max(0f, lateralDistance - clampedTolerance);
-        return Mathf.Clamp01(excess / (redShiftDistance - clampedTolerance));
+        return offCourseTracker.GetSeverity(offCourseTolerance, metronomeRedShiftDistance);
     }
 
     void SetupMetronomeArc()
