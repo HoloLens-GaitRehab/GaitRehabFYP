@@ -62,12 +62,7 @@ public class WaypointSystemManager : MonoBehaviour
     public Color driftArrowBaseColor = Color.white;
     
     private Transform playerCamera;
-    private float sessionStartTime;
-    private bool sessionActive = false;
-    private bool sessionCompleted = false;
-    private string finalSessionStats = "";
-    private float totalDistanceTraveled = 0f;
-    private Vector3 lastCameraPosition;
+    private SessionController sessionController = new SessionController();
     private MetronomeController metronomeController = new MetronomeController();
     private StraightPathGuide straightPathGuide = new StraightPathGuide();
     private OffCourseTracker offCourseTracker = new OffCourseTracker();
@@ -103,17 +98,12 @@ public class WaypointSystemManager : MonoBehaviour
     
     void StartSession()
     {
-        if (sessionActive)
+        if (sessionController.IsActive)
             return;
 
-        sessionActive = true;
-        sessionCompleted = false;
-        finalSessionStats = "";
-        sessionStartTime = Time.time;
-        totalDistanceTraveled = 0f;
+        sessionController.Begin(playerCamera.position, Time.time);
         offCourseTracker.Reset();
         CurrentOffCoursePercent = 0f;
-        lastCameraPosition = playerCamera.position;
 
         // Always spawn/show metronome when session starts
         enableMetronome = true;
@@ -160,13 +150,10 @@ public class WaypointSystemManager : MonoBehaviour
     
     void Update()
     {
-        if (!sessionActive || playerCamera == null)
+        if (!sessionController.IsActive || playerCamera == null)
             return;
         
-        // Track distance traveled
-        float frameDistance = Vector3.Distance(playerCamera.position, lastCameraPosition);
-        totalDistanceTraveled += frameDistance;
-        lastCameraPosition = playerCamera.position;
+        sessionController.UpdateDistance(playerCamera.position);
         
         // Update metronome
         if (enableMetronome)
@@ -176,7 +163,7 @@ public class WaypointSystemManager : MonoBehaviour
 
         UpdateOffCourse(Time.deltaTime);
         straightPathGuide.UpdateRailBrightening(
-            sessionActive,
+            sessionController.IsActive,
             playerCamera,
             offCourseTolerance,
             driftArrowShowBuffer,
@@ -185,7 +172,7 @@ public class WaypointSystemManager : MonoBehaviour
         );
         driftArrowController.Update(
             GetDriftArrowSettings(),
-            sessionActive,
+            sessionController.IsActive,
             straightPathGuide.HasPath,
             playerCamera,
             straightPathGuide.LineStart,
@@ -193,7 +180,13 @@ public class WaypointSystemManager : MonoBehaviour
             GetCurrentOffCourseSeverity()
         );
 
-        if (HasReachedLineEnd())
+        if (sessionController.HasReachedLineEnd(
+            straightPathGuide.HasPath,
+            playerCamera.position,
+            straightPathGuide.LineStart,
+            straightPathGuide.LineEnd,
+            lineEndReachDistance,
+            lineEndProgressPadding))
         {
             CompleteSession();
             return;
@@ -204,7 +197,7 @@ public class WaypointSystemManager : MonoBehaviour
     
     void UpdateStats()
     {
-        if (statsText == null || !sessionActive)
+        if (statsText == null || !sessionController.IsActive)
             return;
 
         // Intentionally blank during session to reduce visual clutter.
@@ -213,17 +206,7 @@ public class WaypointSystemManager : MonoBehaviour
 
     public string GetStatsText()
     {
-        if (sessionCompleted)
-        {
-            return finalSessionStats;
-        }
-
-        if (!sessionActive)
-        {
-            return "Session not started";
-        }
-
-        return "";
+        return sessionController.GetStatsText();
     }
 
     void UpdateOffCourse(float deltaTime)
@@ -235,7 +218,7 @@ public class WaypointSystemManager : MonoBehaviour
             deltaTime,
             trackOffCourse,
             offCourseTolerance,
-            sessionStartTime,
+            sessionController.SessionStartTime,
             playerCamera.position,
             straightPathGuide.LineStart,
             straightPathGuide.LineEnd,
@@ -245,54 +228,20 @@ public class WaypointSystemManager : MonoBehaviour
         CurrentOffCoursePercent = offCourseTracker.CurrentOffCoursePercent;
     }
 
-    bool HasReachedLineEnd()
-    {
-        if (!straightPathGuide.HasPath || playerCamera == null)
-            return false;
-
-        Vector2 start = new Vector2(straightPathGuide.LineStart.x, straightPathGuide.LineStart.z);
-        Vector2 end = new Vector2(straightPathGuide.LineEnd.x, straightPathGuide.LineEnd.z);
-        Vector2 current = new Vector2(playerCamera.position.x, playerCamera.position.z);
-        Vector2 path = end - start;
-
-        float pathLength = path.magnitude;
-        if (pathLength < 0.001f)
-            return false;
-
-        Vector2 pathDir = path / pathLength;
-        float alongDistance = Vector2.Dot(current - start, pathDir);
-        float distanceToEnd = Vector2.Distance(current, end);
-
-        bool nearEnd = distanceToEnd <= Mathf.Max(0.1f, lineEndReachDistance);
-        bool passedEnd = alongDistance >= pathLength - Mathf.Max(0f, lineEndProgressPadding);
-
-        return nearEnd || passedEnd;
-    }
-
     void CompleteSession()
     {
-        if (!sessionActive)
+        if (!sessionController.IsActive)
             return;
 
-        sessionActive = false;
-        sessionCompleted = true;
-
-        float elapsed = Mathf.Max(0f, Time.time - sessionStartTime);
-        int minutes = (int)(elapsed / 60f);
-        int seconds = (int)(elapsed % 60f);
-
-        finalSessionStats = string.Format(
-            "Session complete!\nDistance: {0:F1}m\nOff-course: {1:F0}% ({2:F1}s)\nTime: {3:00}:{4:00}",
-            totalDistanceTraveled,
+        sessionController.Complete(
+            Time.time,
             CurrentOffCoursePercent,
-            offCourseTracker.OffCourseTimeSeconds,
-            minutes,
-            seconds
+            offCourseTracker.OffCourseTimeSeconds
         );
 
         if (statsText != null)
         {
-            statsText.text = finalSessionStats;
+            statsText.text = sessionController.FinalSessionStats;
         }
 
         metronomeController.SetEnabled(false, showMetronomeArc);
@@ -373,7 +322,7 @@ public class WaypointSystemManager : MonoBehaviour
             return;
         }
 
-        if (sessionActive)
+        if (sessionController.IsActive)
         {
             metronomeController.StartOrEnable(this, GetMetronomeSettings());
         }
