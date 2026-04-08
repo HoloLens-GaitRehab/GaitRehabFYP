@@ -104,11 +104,7 @@ public class StatsUiToggle : MonoBehaviour
     private Renderer sessionControlBarBgRenderer;
     private Renderer sessionControlBarFillRenderer;
     private TextMesh sessionControlActionLabel;
-    private GameObject completionOverlayCanvas;
-    private GameObject completionOverlayPanel;
-    private Text completionOverlayTitle;
-    private Text completionOverlayBody;
-    private bool completionOverlayShown;
+    private CompletionOverlayController completionOverlayController = new CompletionOverlayController();
     private Transform cameraTransform;
     private Vector3 followVelocity;
     private Vector3 worldOffset;
@@ -333,6 +329,25 @@ public class StatsUiToggle : MonoBehaviour
             toCamera = -cameraTransform.forward;
         }
         return Quaternion.LookRotation(-toCamera.normalized, Vector3.up);
+    }
+
+    CompletionOverlayController.Settings GetCompletionOverlaySettings()
+    {
+        return new CompletionOverlayController.Settings
+        {
+            autoShowCompletionOverlay = autoShowCompletionOverlay,
+            completionOverlayDistance = completionOverlayDistance,
+            completionOverlayVerticalOffset = completionOverlayVerticalOffset,
+            completionOverlaySize = completionOverlaySize,
+            completionOverlayScale = completionOverlayScale,
+            completionOverlayBackgroundColor = completionOverlayBackgroundColor,
+            completionOverlayAccentColor = completionOverlayAccentColor,
+            completionOverlayTextColor = completionOverlayTextColor,
+            completionTitleFontSize = completionTitleFontSize,
+            completionBodyFontSize = completionBodyFontSize,
+            completionTitleMinFontSize = completionTitleMinFontSize,
+            completionBodyMinFontSize = completionBodyMinFontSize
+        };
     }
 
     void TogglePanel()
@@ -855,8 +870,7 @@ public class StatsUiToggle : MonoBehaviour
     void OnStartSessionPressed()
     {
         startTriggered = true;
-        completionOverlayShown = false;
-        HideCompletionOverlay();
+        completionOverlayController.ResetForNewSession();
 
         if (waypointManager != null)
         {
@@ -888,179 +902,27 @@ public class StatsUiToggle : MonoBehaviour
 
     void EnsureCompletionOverlay()
     {
-        if (completionOverlayCanvas != null)
-            return;
-
-        completionOverlayCanvas = new GameObject("SessionCompletionCanvas");
-        Canvas overlayCanvas = completionOverlayCanvas.AddComponent<Canvas>();
-        overlayCanvas.renderMode = RenderMode.WorldSpace;
-        completionOverlayCanvas.AddComponent<CanvasScaler>();
-        completionOverlayCanvas.AddComponent<GraphicRaycaster>();
-        completionOverlayCanvas.transform.localScale = Vector3.one * Mathf.Clamp(completionOverlayScale, 0.0007f, 0.003f);
-
-        RectTransform canvasRect = completionOverlayCanvas.GetComponent<RectTransform>();
-        canvasRect.sizeDelta = completionOverlaySize;
-
-        completionOverlayPanel = new GameObject("SessionCompletionPanel");
-        completionOverlayPanel.transform.SetParent(completionOverlayCanvas.transform, false);
-
-        Image panelImage = completionOverlayPanel.AddComponent<Image>();
-        panelImage.color = completionOverlayBackgroundColor;
-        completionOverlayPanel.AddComponent<RectMask2D>();
-
-        RectTransform panelRect = completionOverlayPanel.GetComponent<RectTransform>();
-        panelRect.sizeDelta = completionOverlaySize;
-        panelRect.anchoredPosition = Vector2.zero;
-
-        GameObject accentObj = new GameObject("TopAccent");
-        accentObj.transform.SetParent(completionOverlayPanel.transform, false);
-        Image accentImage = accentObj.AddComponent<Image>();
-        accentImage.color = completionOverlayAccentColor;
-        RectTransform accentRect = accentObj.GetComponent<RectTransform>();
-        accentRect.sizeDelta = new Vector2(completionOverlaySize.x * 0.86f, 12f);
-        accentRect.anchoredPosition = new Vector2(0f, (completionOverlaySize.y * 0.5f) - 28f);
-
-        GameObject titleObj = new GameObject("CompletionTitle");
-        titleObj.transform.SetParent(completionOverlayPanel.transform, false);
-        completionOverlayTitle = titleObj.AddComponent<Text>();
-        completionOverlayTitle.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        completionOverlayTitle.fontSize = completionTitleFontSize;
-        completionOverlayTitle.fontStyle = FontStyle.Bold;
-        completionOverlayTitle.color = completionOverlayTextColor;
-        completionOverlayTitle.alignment = TextAnchor.MiddleCenter;
-        completionOverlayTitle.horizontalOverflow = HorizontalWrapMode.Wrap;
-        completionOverlayTitle.verticalOverflow = VerticalWrapMode.Truncate;
-        completionOverlayTitle.resizeTextForBestFit = true;
-        completionOverlayTitle.resizeTextMinSize = Mathf.Max(14, completionTitleMinFontSize);
-        completionOverlayTitle.resizeTextMaxSize = Mathf.Max(completionOverlayTitle.resizeTextMinSize, completionTitleFontSize);
-        RectTransform titleRect = completionOverlayTitle.GetComponent<RectTransform>();
-        titleRect.sizeDelta = new Vector2(completionOverlaySize.x - 80f, 90f);
-        titleRect.anchoredPosition = new Vector2(0f, (completionOverlaySize.y * 0.5f) - 88f);
-
-        GameObject bodyObj = new GameObject("CompletionBody");
-        bodyObj.transform.SetParent(completionOverlayPanel.transform, false);
-        completionOverlayBody = bodyObj.AddComponent<Text>();
-        completionOverlayBody.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        completionOverlayBody.fontSize = completionBodyFontSize;
-        completionOverlayBody.color = completionOverlayTextColor;
-        completionOverlayBody.alignment = TextAnchor.UpperLeft;
-        completionOverlayBody.horizontalOverflow = HorizontalWrapMode.Wrap;
-        completionOverlayBody.verticalOverflow = VerticalWrapMode.Truncate;
-        completionOverlayBody.lineSpacing = 0.92f;
-        completionOverlayBody.resizeTextForBestFit = true;
-        completionOverlayBody.resizeTextMinSize = Mathf.Max(12, completionBodyMinFontSize);
-        completionOverlayBody.resizeTextMaxSize = Mathf.Max(completionOverlayBody.resizeTextMinSize, completionBodyFontSize);
-        RectTransform bodyRect = completionOverlayBody.GetComponent<RectTransform>();
-        bodyRect.sizeDelta = new Vector2(completionOverlaySize.x - 100f, completionOverlaySize.y - 180f);
-        bodyRect.anchoredPosition = new Vector2(0f, -34f);
-
-        completionOverlayCanvas.SetActive(false);
-        UpdateCompletionOverlayPose();
+        completionOverlayController.Ensure(cameraTransform, GetCompletionOverlaySettings());
     }
 
     void UpdateCompletionOverlayPose()
     {
-        if (completionOverlayCanvas == null || cameraTransform == null)
-            return;
-
-        completionOverlayCanvas.transform.SetParent(cameraTransform, false);
-        completionOverlayCanvas.transform.localPosition = new Vector3(0f, completionOverlayVerticalOffset, Mathf.Max(2.2f, completionOverlayDistance));
-        completionOverlayCanvas.transform.localRotation = Quaternion.identity;
+        completionOverlayController.UpdatePose(cameraTransform, GetCompletionOverlaySettings());
     }
 
     void UpdateCompletionOverlayState()
     {
-        if (!autoShowCompletionOverlay || waypointManager == null)
-        {
-            HideCompletionOverlay();
-            completionOverlayShown = false;
-            return;
-        }
-
-        if (waypointManager.IsSessionActive)
-        {
-            completionOverlayShown = false;
-            HideCompletionOverlay();
-            return;
-        }
-
-        if (!waypointManager.IsSessionCompleted)
-        {
-            completionOverlayShown = false;
-            HideCompletionOverlay();
-            return;
-        }
-
-        if (completionOverlayShown)
-            return;
-
-        string statsText = waypointManager.GetStatsText();
-        if (string.IsNullOrWhiteSpace(statsText))
-            return;
-
-        EnsureCompletionOverlay();
-        ApplyCompletionOverlayText(statsText);
-
-        completionOverlayCanvas.SetActive(true);
-        completionOverlayShown = true;
+        completionOverlayController.UpdateState(waypointManager, cameraTransform, GetCompletionOverlaySettings());
     }
 
     void HideCompletionOverlay()
     {
-        if (completionOverlayCanvas != null && completionOverlayCanvas.activeSelf)
-        {
-            completionOverlayCanvas.SetActive(false);
-        }
+        completionOverlayController.Hide();
     }
 
     void ApplyCompletionOverlayText(string statsText)
     {
-        if (completionOverlayTitle == null || completionOverlayBody == null)
-            return;
-
-        string[] lines = statsText.Split('\n');
-        if (lines.Length == 0)
-        {
-            completionOverlayTitle.text = "Session Summary";
-            completionOverlayBody.text = statsText;
-            return;
-        }
-
-        completionOverlayTitle.text = lines[0];
-
-        string accentHex = ColorUtility.ToHtmlStringRGB(completionOverlayAccentColor);
-        System.Text.StringBuilder bodyBuilder = new System.Text.StringBuilder();
-
-        for (int i = 1; i < lines.Length; i++)
-        {
-            string line = lines[i];
-            if (string.IsNullOrWhiteSpace(line))
-                continue;
-
-            int separatorIndex = line.IndexOf(':');
-            if (separatorIndex > 0)
-            {
-                string key = line.Substring(0, separatorIndex).Trim();
-                string value = line.Substring(separatorIndex + 1).Trim();
-                bodyBuilder.Append("<color=#");
-                bodyBuilder.Append(accentHex);
-                bodyBuilder.Append("><b>");
-                bodyBuilder.Append(key);
-                bodyBuilder.Append(":</b></color> ");
-                bodyBuilder.Append(value);
-            }
-            else
-            {
-                bodyBuilder.Append(line.Trim());
-            }
-
-            if (i < lines.Length - 1)
-            {
-                bodyBuilder.Append("\n");
-            }
-        }
-
-        completionOverlayBody.text = bodyBuilder.ToString();
+        // Kept only for backward compatibility while this class is being decomposed.
     }
 
     void SetupVoiceCommands()
