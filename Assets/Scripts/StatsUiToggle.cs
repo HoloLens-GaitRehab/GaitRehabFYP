@@ -23,6 +23,10 @@ public class StatsUiToggle : MonoBehaviour
     public Color statsPanelTextColor = Color.white;
     public int statsPanelFontSize = 24;
 
+    [Header("Stats Panel Behavior")]
+    public bool autoHideStatsPanel = true;
+    [Range(1f, 60f)] public float statsPanelAutoHideSeconds = 10f;
+
     [Header("MRTK Buttons")]
     public bool useMrtkButtons = true;
     public GameObject mrtkButtonPrefab;
@@ -99,6 +103,7 @@ public class StatsUiToggle : MonoBehaviour
     private VoiceCommandController voiceCommandController = new VoiceCommandController();
     private UiFollowController uiFollowController = new UiFollowController();
     private Transform cameraTransform;
+    private float statsPanelHideAtTime = -1f;
 
     void Start()
     {
@@ -234,6 +239,11 @@ public class StatsUiToggle : MonoBehaviour
         if (panelObj.activeSelf && waypointManager != null)
         {
             panelText.text = waypointManager.GetStatsText();
+        }
+
+        if (panelObj.activeSelf && autoHideStatsPanel && statsPanelHideAtTime > 0f && Time.time >= statsPanelHideAtTime)
+        {
+            HideStatsPanel();
         }
 
         if (metronomeButtonText != null && waypointManager != null)
@@ -382,7 +392,39 @@ public class StatsUiToggle : MonoBehaviour
         if (panelObj == null)
             return;
 
-        panelObj.SetActive(!panelObj.activeSelf);
+        if (panelObj.activeSelf)
+        {
+            HideStatsPanel();
+        }
+        else
+        {
+            ShowStatsPanel();
+        }
+    }
+
+    void ShowStatsPanel()
+    {
+        if (panelObj == null)
+            return;
+
+        panelObj.SetActive(true);
+        if (autoHideStatsPanel)
+        {
+            statsPanelHideAtTime = Time.time + Mathf.Max(1f, statsPanelAutoHideSeconds);
+        }
+        else
+        {
+            statsPanelHideAtTime = -1f;
+        }
+    }
+
+    void HideStatsPanel()
+    {
+        if (panelObj == null)
+            return;
+
+        panelObj.SetActive(false);
+        statsPanelHideAtTime = -1f;
     }
 
     void ToggleMetronome()
@@ -434,13 +476,11 @@ public class StatsUiToggle : MonoBehaviour
         voiceCommandController.Initialize(
             onShowStats: () =>
             {
-                if (panelObj != null)
-                    panelObj.SetActive(true);
+                ShowStatsPanel();
             },
             onHideStats: () =>
             {
-                if (panelObj != null)
-                    panelObj.SetActive(false);
+                HideStatsPanel();
             },
             onToggleMetronome: ToggleMetronome,
             onMetronomeOn: () =>
