@@ -89,10 +89,8 @@ public class StatsUiToggle : MonoBehaviour
     private SessionDwellControlController sessionDwellControlController = new SessionDwellControlController();
     private StartSessionControlController startSessionControlController = new StartSessionControlController();
     private VoiceCommandController voiceCommandController = new VoiceCommandController();
+    private UiFollowController uiFollowController = new UiFollowController();
     private Transform cameraTransform;
-    private Vector3 followVelocity;
-    private Vector3 worldOffset;
-    private Quaternion fixedRotation;
 
     void Start()
     {
@@ -121,15 +119,10 @@ public class StatsUiToggle : MonoBehaviour
         // Place UI in front of camera (world space) and smooth follow in LateUpdate
         if (cameraTransform != null)
         {
-            canvasObj.transform.position = GetTargetPosition();
-            canvasObj.transform.rotation = GetTargetRotation();
+            canvasObj.transform.position = uiFollowController.GetTargetPosition(cameraTransform, uiDistance, uiOffset);
+            canvasObj.transform.rotation = uiFollowController.GetTargetRotation(cameraTransform, canvasObj.transform.position);
             canvasObj.transform.localScale = Vector3.one * 0.0022f; // scale for world-space UI
-        }
-
-        if (cameraTransform != null)
-        {
-            worldOffset = canvasObj.transform.position - cameraTransform.position;
-            fixedRotation = canvasObj.transform.rotation;
+            uiFollowController.InitializeOffsets(cameraTransform, canvasObj.transform);
         }
 
         RectTransform canvasRect = canvasObj.GetComponent<RectTransform>();
@@ -260,51 +253,16 @@ public class StatsUiToggle : MonoBehaviour
         UpdateCompletionOverlayPose();
         startSessionControlController.LateUpdatePose(cameraTransform, GetStartSessionControlSettings(), OnStartSessionPressed);
 
-        Vector3 targetPos = followPositionOnly ? cameraTransform.position + worldOffset : GetTargetPosition();
-        Quaternion targetRot = followPositionOnly ? fixedRotation : GetTargetRotation();
-
-        float angleToTarget = Vector3.Angle(cameraTransform.forward, targetPos - cameraTransform.position);
-        float distanceToTarget = Vector3.Distance(canvasObj.transform.position, targetPos);
-
-        // Only move the UI if it's outside a small deadzone
-        if (angleToTarget > followAngleThreshold || distanceToTarget > followDistanceThreshold)
-        {
-            canvasObj.transform.position = Vector3.SmoothDamp(
-                canvasObj.transform.position,
-                targetPos,
-                ref followVelocity,
-                1f / Mathf.Max(0.01f, followSpeed)
-            );
-
-            if (!followPositionOnly)
-            {
-                canvasObj.transform.rotation = Quaternion.Slerp(
-                    canvasObj.transform.rotation,
-                    targetRot,
-                    Time.deltaTime * rotateSpeed
-                );
-            }
-        }
-    }
-
-    Vector3 GetTargetPosition()
-    {
-        return cameraTransform.position
-               + cameraTransform.forward * uiDistance
-               + cameraTransform.right * uiOffset.x
-               + cameraTransform.up * uiOffset.y
-               + cameraTransform.forward * uiOffset.z;
-    }
-
-    Quaternion GetTargetRotation()
-    {
-        Vector3 toCamera = cameraTransform.position - canvasObj.transform.position;
-        toCamera.y = 0f;
-        if (toCamera.sqrMagnitude < 0.001f)
-        {
-            toCamera = -cameraTransform.forward;
-        }
-        return Quaternion.LookRotation(-toCamera.normalized, Vector3.up);
+        uiFollowController.UpdateFollow(
+            cameraTransform,
+            canvasObj.transform,
+            followPositionOnly,
+            uiDistance,
+            uiOffset,
+            followAngleThreshold,
+            followDistanceThreshold,
+            followSpeed,
+            rotateSpeed);
     }
 
     CompletionOverlayController.Settings GetCompletionOverlaySettings()
