@@ -83,20 +83,11 @@ public class StatsUiToggle : MonoBehaviour
     private Button toggleButton;
     private Button metronomeButton;
     private Text metronomeButtonText;
-    private Button startSessionFallbackButton;
-    private GameObject startSessionFallbackCanvas;
     private GameObject mrtkStatsButton;
     private GameObject mrtkMetronomeButton;
-    private GameObject startSessionButton;
-    private GameObject startDwellBarRoot;
-    private Transform startDwellBarFill;
-    private Renderer startDwellBarBgRenderer;
-    private Renderer startDwellBarFillRenderer;
-    private float startDwellTimer;
-    private bool startTriggered;
-    private bool waitingForNextSession;
     private CompletionOverlayController completionOverlayController = new CompletionOverlayController();
     private SessionDwellControlController sessionDwellControlController = new SessionDwellControlController();
+    private StartSessionControlController startSessionControlController = new StartSessionControlController();
     private VoiceCommandController voiceCommandController = new VoiceCommandController();
     private Transform cameraTransform;
     private Vector3 followVelocity;
@@ -114,7 +105,7 @@ public class StatsUiToggle : MonoBehaviour
 
         CreateUi();
         EnsureCompletionOverlay();
-        TryCreateStartSessionButton();
+        startSessionControlController.EnsureCreated(cameraTransform, GetStartSessionControlSettings(), OnStartSessionPressed);
         SetupVoiceCommands();
     }
 
@@ -231,8 +222,7 @@ public class StatsUiToggle : MonoBehaviour
 
     void Update()
     {
-        UpdateStartButtonSessionCycle();
-        UpdateStartDwellActivation();
+        startSessionControlController.Update(cameraTransform, waypointManager, GetStartSessionControlSettings(), OnStartSessionPressed);
         UpdateSessionDwellControls();
         UpdateCompletionOverlayState();
 
@@ -264,17 +254,11 @@ public class StatsUiToggle : MonoBehaviour
             cameraTransform = Camera.main != null ? Camera.main.transform : null;
         }
 
-        if (startSessionButton == null && startSessionFallbackButton == null)
-        {
-            TryCreateStartSessionButton();
-        }
-
         if (canvasObj == null || cameraTransform == null)
             return;
 
         UpdateCompletionOverlayPose();
-
-        UpdateStartSessionButtonPose();
+        startSessionControlController.LateUpdatePose(cameraTransform, GetStartSessionControlSettings(), OnStartSessionPressed);
 
         Vector3 targetPos = followPositionOnly ? cameraTransform.position + worldOffset : GetTargetPosition();
         Quaternion targetRot = followPositionOnly ? fixedRotation : GetTargetRotation();
@@ -364,6 +348,33 @@ public class StatsUiToggle : MonoBehaviour
         };
     }
 
+    StartSessionControlController.Settings GetStartSessionControlSettings()
+    {
+        return new StartSessionControlController.Settings
+        {
+            showStartSessionButton = showStartSessionButton,
+            useMrtkButtons = useMrtkButtons,
+            mrtkButtonPrefab = mrtkButtonPrefab,
+            mrtkButtonScale = mrtkButtonScale,
+            buttonSize = buttonSize,
+            useDwellStart = useDwellStart,
+            startDwellSeconds = startDwellSeconds,
+            startGazeAngleThreshold = startGazeAngleThreshold,
+            startGazeMaxDistance = startGazeMaxDistance,
+            dwellBarWidth = dwellBarWidth,
+            dwellBarHeight = dwellBarHeight,
+            dwellBarDepth = dwellBarDepth,
+            dwellBarVerticalOffset = dwellBarVerticalOffset,
+            dwellBarBackgroundColor = dwellBarBackgroundColor,
+            dwellBarFillColor = dwellBarFillColor,
+            startButtonDistance = startButtonDistance,
+            startButtonOffset = startButtonOffset,
+            followStartButtonVerticalGaze = followStartButtonVerticalGaze,
+            startButtonMinHeightAboveEyes = startButtonMinHeightAboveEyes,
+            hideStartButtonAfterStart = hideStartButtonAfterStart
+        };
+    }
+
     void TogglePanel()
     {
         if (panelObj == null)
@@ -383,243 +394,43 @@ public class StatsUiToggle : MonoBehaviour
 
     void TryCreateStartSessionButton()
     {
-        if (!showStartSessionButton || cameraTransform == null)
-            return;
-
-        if (useMrtkButtons && mrtkButtonPrefab != null)
-        {
-            CreateMrtkStartSessionButton();
-            return;
-        }
-
-        CreateFallbackStartButton();
+        // Moved to StartSessionControlController.
     }
 
     void CreateMrtkStartSessionButton()
     {
-        if (startSessionButton != null)
-            return;
-
-        startSessionButton = Instantiate(mrtkButtonPrefab);
-        startSessionButton.name = "StartSessionButton";
-        startSessionButton.transform.localScale = mrtkButtonScale;
-
-        Interactable interactable = startSessionButton.GetComponent<Interactable>();
-        if (interactable != null)
-        {
-            interactable.OnClick.RemoveAllListeners();
-            if (!useDwellStart)
-            {
-                interactable.OnClick.AddListener(OnStartSessionPressed);
-            }
-        }
-
-        SetMrtkButtonLabel(startSessionButton, useDwellStart ? "Look & Hold" : "Start");
-        UpdateStartSessionButtonPose();
+        // Moved to StartSessionControlController.
     }
 
     void CreateFallbackStartButton()
     {
-        if (startSessionFallbackButton != null || cameraTransform == null)
-            return;
-
-        startSessionFallbackCanvas = new GameObject("StartSessionCanvas");
-        Canvas fallbackCanvas = startSessionFallbackCanvas.AddComponent<Canvas>();
-        fallbackCanvas.renderMode = RenderMode.WorldSpace;
-        startSessionFallbackCanvas.AddComponent<CanvasScaler>();
-        startSessionFallbackCanvas.AddComponent<GraphicRaycaster>();
-        startSessionFallbackCanvas.transform.localScale = Vector3.one * 0.0022f;
-
-        RectTransform canvasRect = startSessionFallbackCanvas.GetComponent<RectTransform>();
-        canvasRect.sizeDelta = new Vector2(300f, 180f);
-
-        GameObject buttonObj = new GameObject("StartSessionButtonFallback");
-        buttonObj.transform.SetParent(startSessionFallbackCanvas.transform, false);
-
-        Image buttonImage = buttonObj.AddComponent<Image>();
-        buttonImage.color = new Color(0.2f, 0.7f, 0.2f, 0.95f);
-
-        startSessionFallbackButton = buttonObj.AddComponent<Button>();
-        RectTransform buttonRect = buttonObj.GetComponent<RectTransform>();
-        buttonRect.sizeDelta = buttonSize;
-        buttonRect.anchoredPosition = new Vector2(0f, 20f);
-
-        GameObject labelObj = new GameObject("StartText");
-        labelObj.transform.SetParent(buttonObj.transform, false);
-        Text label = labelObj.AddComponent<Text>();
-        label.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        label.fontSize = 30;
-        label.color = Color.white;
-        label.alignment = TextAnchor.MiddleCenter;
-        label.text = "Start";
-        RectTransform labelRect = label.GetComponent<RectTransform>();
-        labelRect.sizeDelta = buttonSize;
-        labelRect.anchoredPosition = Vector2.zero;
-
-        if (!useDwellStart)
-        {
-            startSessionFallbackButton.onClick.AddListener(OnStartSessionPressed);
-        }
-        UpdateStartSessionButtonPose();
+        // Moved to StartSessionControlController.
     }
 
     void EnsureStartDwellBar()
     {
-        if (!useDwellStart || startDwellBarRoot != null)
-            return;
-
-        startDwellBarRoot = new GameObject("StartDwellProgressBar");
-
-        GameObject bgObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        bgObj.name = "DwellBarBackground";
-        Destroy(bgObj.GetComponent<Collider>());
-        bgObj.transform.SetParent(startDwellBarRoot.transform, false);
-        bgObj.transform.localScale = new Vector3(dwellBarWidth, dwellBarHeight, dwellBarDepth);
-        startDwellBarBgRenderer = bgObj.GetComponent<Renderer>();
-
-        GameObject fillObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        fillObj.name = "DwellBarFill";
-        Destroy(fillObj.GetComponent<Collider>());
-        fillObj.transform.SetParent(startDwellBarRoot.transform, false);
-        startDwellBarFill = fillObj.transform;
-        startDwellBarFill.localScale = new Vector3(0.0001f, dwellBarHeight * 0.8f, dwellBarDepth * 0.8f);
-        startDwellBarFill.localPosition = new Vector3(-dwellBarWidth * 0.5f, 0f, -0.001f);
-        startDwellBarFillRenderer = fillObj.GetComponent<Renderer>();
-
-        Shader shader = Shader.Find("Sprites/Default");
-        if (shader == null)
-        {
-            shader = Shader.Find("Unlit/Color");
-        }
-        if (shader != null)
-        {
-            if (startDwellBarBgRenderer != null)
-            {
-                startDwellBarBgRenderer.material = new Material(shader);
-                startDwellBarBgRenderer.material.color = dwellBarBackgroundColor;
-            }
-            if (startDwellBarFillRenderer != null)
-            {
-                startDwellBarFillRenderer.material = new Material(shader);
-                startDwellBarFillRenderer.material.color = dwellBarFillColor;
-            }
-        }
-
-        startDwellBarRoot.SetActive(false);
+        // Moved to StartSessionControlController.
     }
 
     Transform GetActiveStartTarget()
     {
-        if (startSessionButton != null && startSessionButton.activeSelf)
-            return startSessionButton.transform;
-
-        if (startSessionFallbackCanvas != null && startSessionFallbackCanvas.activeSelf)
-            return startSessionFallbackCanvas.transform;
-
+        // Moved to StartSessionControlController.
         return null;
     }
 
     void UpdateStartDwellActivation()
     {
-        if (!useDwellStart || startTriggered)
-            return;
-
-        if (cameraTransform == null)
-            return;
-
-        Transform target = GetActiveStartTarget();
-        EnsureStartDwellBar();
-
-        if (target == null)
-        {
-            startDwellTimer = 0f;
-            if (startDwellBarRoot != null)
-            {
-                startDwellBarRoot.SetActive(false);
-            }
-            return;
-        }
-
-        Vector3 toTarget = target.position - cameraTransform.position;
-        float distance = toTarget.magnitude;
-        float angle = distance > 0.001f ? Vector3.Angle(cameraTransform.forward, toTarget.normalized) : 180f;
-        bool isGazing = angle <= Mathf.Max(1f, startGazeAngleThreshold) && distance <= Mathf.Max(0.2f, startGazeMaxDistance);
-
-        if (isGazing)
-        {
-            startDwellTimer += Time.deltaTime;
-        }
-        else
-        {
-            startDwellTimer = Mathf.Max(0f, startDwellTimer - Time.deltaTime * 2f);
-        }
-
-        float progress = Mathf.Clamp01(startDwellTimer / Mathf.Max(0.2f, startDwellSeconds));
-        UpdateDwellBarVisual(target, progress);
-
-        if (progress >= 1f)
-        {
-            startTriggered = true;
-            OnStartSessionPressed();
-        }
+        // Moved to StartSessionControlController.
     }
 
     void UpdateStartButtonSessionCycle()
     {
-        if (!showStartSessionButton || waypointManager == null)
-            return;
-
-        if (waypointManager.IsSessionActive)
-        {
-            waitingForNextSession = true;
-            return;
-        }
-
-        if (waypointManager.IsSessionCompleted && waitingForNextSession)
-        {
-            if (startSessionButton == null && startSessionFallbackButton == null)
-            {
-                TryCreateStartSessionButton();
-            }
-
-            if (startSessionButton != null)
-            {
-                startSessionButton.SetActive(true);
-                SetMrtkButtonLabel(startSessionButton, useDwellStart ? "Look & Hold" : "Start");
-            }
-
-            if (startSessionFallbackCanvas != null)
-            {
-                startSessionFallbackCanvas.SetActive(true);
-            }
-            else if (startSessionFallbackButton != null)
-            {
-                startSessionFallbackButton.gameObject.SetActive(true);
-            }
-
-            startTriggered = false;
-            startDwellTimer = 0f;
-            if (startDwellBarRoot != null)
-            {
-                startDwellBarRoot.SetActive(false);
-            }
-
-            waitingForNextSession = false;
-        }
+        // Moved to StartSessionControlController.
     }
 
     void UpdateDwellBarVisual(Transform target, float progress)
     {
-        if (startDwellBarRoot == null || startDwellBarFill == null)
-            return;
-
-        startDwellBarRoot.SetActive(progress > 0.001f || target != null);
-        startDwellBarRoot.transform.position = target.position + target.up * dwellBarVerticalOffset;
-        startDwellBarRoot.transform.rotation = target.rotation;
-
-        float fillWidth = Mathf.Max(0.0001f, dwellBarWidth * progress);
-        startDwellBarFill.localScale = new Vector3(fillWidth, dwellBarHeight * 0.8f, dwellBarDepth * 0.8f);
-        startDwellBarFill.localPosition = new Vector3((-dwellBarWidth * 0.5f) + (fillWidth * 0.5f), 0f, -0.001f);
+        // Moved to StartSessionControlController.
     }
 
     void EnsureSessionControlDwellBar()
@@ -644,91 +455,16 @@ public class StatsUiToggle : MonoBehaviour
 
     void UpdateStartSessionButtonPose()
     {
-        if (cameraTransform == null)
-            return;
-
-        Vector3 horizontalForward = cameraTransform.forward;
-        horizontalForward.y = 0f;
-        if (horizontalForward.sqrMagnitude < 0.0001f)
-        {
-            horizontalForward = cameraTransform.parent != null ? cameraTransform.parent.forward : Vector3.forward;
-            horizontalForward.y = 0f;
-        }
-        horizontalForward.Normalize();
-
-        Vector3 horizontalRight = Vector3.Cross(Vector3.up, horizontalForward).normalized;
-
-        Vector3 targetPos = cameraTransform.position
-                            + horizontalForward * startButtonDistance
-                            + horizontalRight * startButtonOffset.x
-                            + horizontalForward * startButtonOffset.z;
-
-        float verticalOffset = startButtonOffset.y;
-        if (followStartButtonVerticalGaze)
-        {
-            verticalOffset += cameraTransform.forward.y * startButtonDistance;
-        }
-        else
-        {
-            verticalOffset = Mathf.Max(verticalOffset, startButtonMinHeightAboveEyes);
-        }
-        targetPos.y = cameraTransform.position.y + verticalOffset;
-
-        Vector3 toCamera = cameraTransform.position - targetPos;
-        if (!followStartButtonVerticalGaze)
-        {
-            toCamera.y = 0f;
-        }
-        if (toCamera.sqrMagnitude < 0.001f)
-        {
-            toCamera = -cameraTransform.forward;
-        }
-
-        Quaternion targetRot = Quaternion.LookRotation(-toCamera.normalized, Vector3.up);
-
-        if (startSessionButton != null && startSessionButton.activeSelf)
-        {
-            startSessionButton.transform.position = targetPos;
-            startSessionButton.transform.rotation = targetRot;
-        }
-
-        if (startSessionFallbackCanvas != null && startSessionFallbackCanvas.activeSelf)
-        {
-            startSessionFallbackCanvas.transform.position = targetPos;
-            startSessionFallbackCanvas.transform.rotation = targetRot;
-        }
+        // Moved to StartSessionControlController.
     }
 
     void OnStartSessionPressed()
     {
-        startTriggered = true;
         completionOverlayController.ResetForNewSession();
 
         if (waypointManager != null)
         {
             waypointManager.StartSessionFromButton();
-        }
-
-        if (hideStartButtonAfterStart && startSessionButton != null)
-        {
-            startSessionButton.SetActive(false);
-        }
-
-        if (hideStartButtonAfterStart && startSessionFallbackButton != null)
-        {
-            if (startSessionFallbackCanvas != null)
-            {
-                startSessionFallbackCanvas.SetActive(false);
-            }
-            else
-            {
-                startSessionFallbackButton.gameObject.SetActive(false);
-            }
-        }
-
-        if (startDwellBarRoot != null)
-        {
-            startDwellBarRoot.SetActive(false);
         }
     }
 
