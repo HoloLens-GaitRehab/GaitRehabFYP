@@ -96,7 +96,14 @@ public class SessionController
         return nearEnd || passedEnd;
     }
 
-    public void Complete(float currentTime, float offCoursePercent, float offCourseSeconds, string completionTitle = "Session complete!")
+    public void Complete(
+        float currentTime,
+        bool trackOffCourse,
+        float offCoursePercent,
+        float offCourseSeconds,
+        float maxLateralDistance,
+        float averageLateralDistance,
+        string completionTitle = "Session complete!")
     {
         if (!IsActive)
             return;
@@ -113,15 +120,33 @@ public class SessionController
         float elapsed = GetEffectiveElapsedTime(currentTime);
         int minutes = (int)(elapsed / 60f);
         int seconds = (int)(elapsed % 60f);
+        float avgSpeedMps = elapsed > 0.001f ? TotalDistanceTraveled / elapsed : 0f;
+        float paceSecondsPerMeter = TotalDistanceTraveled > 0.001f ? elapsed / TotalDistanceTraveled : 0f;
+        float onCoursePercent = Mathf.Clamp(100f - offCoursePercent, 0f, 100f);
+
+        string offCourseSummary = trackOffCourse
+            ? string.Format("Off-course: {0:F0}% ({1:F1}s)", offCoursePercent, offCourseSeconds)
+            : "Off-course: N/A";
+
+        string onCourseSummary = trackOffCourse
+            ? string.Format("On-course: {0:F0}%", onCoursePercent)
+            : "On-course: N/A";
+
+        string driftSummary = trackOffCourse
+            ? string.Format("Drift avg/max: {0:F2}m / {1:F2}m", averageLateralDistance, maxLateralDistance)
+            : "Drift avg/max: N/A";
 
         FinalSessionStats = string.Format(
-            "{0}\nDistance: {1:F1}m\nOff-course: {2:F0}% ({3:F1}s)\nTime: {4:00}:{5:00}",
+            "{0}\nDistance: {1:F1}m\nTime: {2:00}:{3:00}\nSpeed avg: {4:F2} m/s\nPace: {5:F1} s/m\n{6}\n{7}\n{8}",
             completionTitle,
             TotalDistanceTraveled,
-            offCoursePercent,
-            offCourseSeconds,
             minutes,
-            seconds
+            seconds,
+            avgSpeedMps,
+            paceSecondsPerMeter,
+            onCourseSummary,
+            offCourseSummary,
+            driftSummary
         );
     }
 

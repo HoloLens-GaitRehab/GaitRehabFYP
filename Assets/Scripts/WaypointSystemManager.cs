@@ -254,8 +254,11 @@ public class WaypointSystemManager : MonoBehaviour
 
         sessionController.Complete(
             Time.time,
+            trackOffCourse,
             CurrentOffCoursePercent,
             offCourseTracker.OffCourseTimeSeconds,
+            offCourseTracker.MaxLateralDistance,
+            offCourseTracker.AverageLateralDistance,
             completionTitle
         );
 
