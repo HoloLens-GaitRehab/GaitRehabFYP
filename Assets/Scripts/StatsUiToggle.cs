@@ -2,7 +2,6 @@ using UnityEngine;
 using UnityEngine.UI;
 using Microsoft.MixedReality.Toolkit.UI;
 using TMPro;
-using UnityEngine.Windows.Speech;
 
 public class StatsUiToggle : MonoBehaviour
 {
@@ -105,11 +104,11 @@ public class StatsUiToggle : MonoBehaviour
     private Renderer sessionControlBarFillRenderer;
     private TextMesh sessionControlActionLabel;
     private CompletionOverlayController completionOverlayController = new CompletionOverlayController();
+    private VoiceCommandController voiceCommandController = new VoiceCommandController();
     private Transform cameraTransform;
     private Vector3 followVelocity;
     private Vector3 worldOffset;
     private Quaternion fixedRotation;
-    private KeywordRecognizer keywordRecognizer;
 
     void Start()
     {
@@ -927,91 +926,48 @@ public class StatsUiToggle : MonoBehaviour
 
     void SetupVoiceCommands()
     {
-        string[] keywords =
-        {
-            "show stats",
-            "hide stats",
-            "metronome",
-            "metronome on",
-            "metronome off",
-            "pause",
-            "resume",
-            "end session"
-        };
-
-        keywordRecognizer = new KeywordRecognizer(keywords);
-        keywordRecognizer.OnPhraseRecognized += OnPhraseRecognized;
-        keywordRecognizer.Start();
-    }
-
-    void OnPhraseRecognized(PhraseRecognizedEventArgs args)
-    {
-        string command = args.text.ToLower();
-
-        switch (command)
-        {
-            case "show stats":
+        voiceCommandController.Initialize(
+            onShowStats: () =>
+            {
                 if (panelObj != null)
-                {
                     panelObj.SetActive(true);
-                }
-                break;
-
-            case "hide stats":
+            },
+            onHideStats: () =>
+            {
                 if (panelObj != null)
-                {
                     panelObj.SetActive(false);
-                }
-                break;
-
-            case "metronome":
-                ToggleMetronome();
-                break;
-
-            case "metronome on":
+            },
+            onToggleMetronome: ToggleMetronome,
+            onMetronomeOn: () =>
+            {
                 if (waypointManager != null)
-                {
                     waypointManager.ToggleMetronome(true);
-                }
-                break;
-
-            case "metronome off":
+            },
+            onMetronomeOff: () =>
+            {
                 if (waypointManager != null)
-                {
                     waypointManager.ToggleMetronome(false);
-                }
-                break;
-
-            case "pause":
+            },
+            onPause: () =>
+            {
                 if (waypointManager != null)
-                {
                     waypointManager.PauseSession();
-                }
-                break;
-
-            case "resume":
+            },
+            onResume: () =>
+            {
                 if (waypointManager != null)
-                {
                     waypointManager.ResumeSession();
-                }
-                break;
-
-            case "end session":
+            },
+            onEndSession: () =>
+            {
                 if (waypointManager != null)
-                {
                     waypointManager.EndSessionEarly();
-                }
-                break;
-        }
+            });
     }
 
     void OnDestroy()
     {
-        if (keywordRecognizer != null && keywordRecognizer.IsRunning)
-        {
-            keywordRecognizer.Stop();
-            keywordRecognizer.Dispose();
-        }
+        voiceCommandController.Dispose();
     }
 
     GameObject CreateMrtkButton(string name, Vector3 localPos, string label, UnityEngine.Events.UnityAction onClick)
