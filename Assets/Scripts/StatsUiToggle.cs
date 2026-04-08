@@ -392,70 +392,9 @@ public class StatsUiToggle : MonoBehaviour
         waypointManager.ToggleMetronome(newState);
     }
 
-    void TryCreateStartSessionButton()
-    {
-        // Moved to StartSessionControlController.
-    }
-
-    void CreateMrtkStartSessionButton()
-    {
-        // Moved to StartSessionControlController.
-    }
-
-    void CreateFallbackStartButton()
-    {
-        // Moved to StartSessionControlController.
-    }
-
-    void EnsureStartDwellBar()
-    {
-        // Moved to StartSessionControlController.
-    }
-
-    Transform GetActiveStartTarget()
-    {
-        // Moved to StartSessionControlController.
-        return null;
-    }
-
-    void UpdateStartDwellActivation()
-    {
-        // Moved to StartSessionControlController.
-    }
-
-    void UpdateStartButtonSessionCycle()
-    {
-        // Moved to StartSessionControlController.
-    }
-
-    void UpdateDwellBarVisual(Transform target, float progress)
-    {
-        // Moved to StartSessionControlController.
-    }
-
-    void EnsureSessionControlDwellBar()
-    {
-        // Moved to SessionDwellControlController.
-    }
-
-    void HideSessionControlDwellBar()
-    {
-        // Moved to SessionDwellControlController.
-    }
-
-    void UpdateSessionControlDwellBar(float progress, string actionLabel, Color fillColor)
-    {
-        // Moved to SessionDwellControlController.
-    }
-
     void UpdateSessionDwellControls()
     {
         sessionDwellControlController.Update(waypointManager, cameraTransform, GetSessionDwellControlSettings());
-    }
-
-    void UpdateStartSessionButtonPose()
-    {
-        // Moved to StartSessionControlController.
     }
 
     void OnStartSessionPressed()
@@ -486,11 +425,6 @@ public class StatsUiToggle : MonoBehaviour
     void HideCompletionOverlay()
     {
         completionOverlayController.Hide();
-    }
-
-    void ApplyCompletionOverlayText(string statsText)
-    {
-        // Kept only for backward compatibility while this class is being decomposed.
     }
 
     void SetupVoiceCommands()
