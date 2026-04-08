@@ -64,6 +64,17 @@ public class StatsUiToggle : MonoBehaviour
     public Color sessionControlBarResumeColor = new Color(0.2f, 0.9f, 0.35f, 0.95f);
     public Color sessionControlBarEndColor = new Color(1f, 0.3f, 0.3f, 0.95f);
 
+    [Header("Completion Overlay")]
+    public bool autoShowCompletionOverlay = true;
+    public float completionOverlayDistance = 1.25f;
+    public float completionOverlayVerticalOffset = 0.02f;
+    public Vector2 completionOverlaySize = new Vector2(760f, 440f);
+    public Color completionOverlayBackgroundColor = new Color(0.03f, 0.07f, 0.12f, 0.9f);
+    public Color completionOverlayAccentColor = new Color(0.16f, 0.86f, 0.66f, 0.95f);
+    public Color completionOverlayTextColor = new Color(0.94f, 0.97f, 1f, 1f);
+    public int completionTitleFontSize = 46;
+    public int completionBodyFontSize = 34;
+
     private GameObject canvasObj;
     private GameObject panelObj;
     private Text panelText;
@@ -90,6 +101,11 @@ public class StatsUiToggle : MonoBehaviour
     private Renderer sessionControlBarBgRenderer;
     private Renderer sessionControlBarFillRenderer;
     private TextMesh sessionControlActionLabel;
+    private GameObject completionOverlayCanvas;
+    private GameObject completionOverlayPanel;
+    private Text completionOverlayTitle;
+    private Text completionOverlayBody;
+    private bool completionOverlayShown;
     private Transform cameraTransform;
     private Vector3 followVelocity;
     private Vector3 worldOffset;
@@ -106,6 +122,7 @@ public class StatsUiToggle : MonoBehaviour
         cameraTransform = Camera.main != null ? Camera.main.transform : null;
 
         CreateUi();
+        EnsureCompletionOverlay();
         TryCreateStartSessionButton();
         SetupVoiceCommands();
     }
@@ -226,6 +243,7 @@ public class StatsUiToggle : MonoBehaviour
         UpdateStartButtonSessionCycle();
         UpdateStartDwellActivation();
         UpdateSessionDwellControls();
+        UpdateCompletionOverlayState();
 
         if (panelObj == null || panelText == null)
             return;
@@ -262,6 +280,8 @@ public class StatsUiToggle : MonoBehaviour
 
         if (canvasObj == null || cameraTransform == null)
             return;
+
+        UpdateCompletionOverlayPose();
 
         UpdateStartSessionButtonPose();
 
@@ -832,6 +852,8 @@ public class StatsUiToggle : MonoBehaviour
     void OnStartSessionPressed()
     {
         startTriggered = true;
+        completionOverlayShown = false;
+        HideCompletionOverlay();
 
         if (waypointManager != null)
         {
@@ -859,6 +881,175 @@ public class StatsUiToggle : MonoBehaviour
         {
             startDwellBarRoot.SetActive(false);
         }
+    }
+
+    void EnsureCompletionOverlay()
+    {
+        if (completionOverlayCanvas != null)
+            return;
+
+        completionOverlayCanvas = new GameObject("SessionCompletionCanvas");
+        Canvas overlayCanvas = completionOverlayCanvas.AddComponent<Canvas>();
+        overlayCanvas.renderMode = RenderMode.WorldSpace;
+        completionOverlayCanvas.AddComponent<CanvasScaler>();
+        completionOverlayCanvas.AddComponent<GraphicRaycaster>();
+        completionOverlayCanvas.transform.localScale = Vector3.one * 0.0019f;
+
+        RectTransform canvasRect = completionOverlayCanvas.GetComponent<RectTransform>();
+        canvasRect.sizeDelta = completionOverlaySize;
+
+        completionOverlayPanel = new GameObject("SessionCompletionPanel");
+        completionOverlayPanel.transform.SetParent(completionOverlayCanvas.transform, false);
+
+        Image panelImage = completionOverlayPanel.AddComponent<Image>();
+        panelImage.color = completionOverlayBackgroundColor;
+
+        RectTransform panelRect = completionOverlayPanel.GetComponent<RectTransform>();
+        panelRect.sizeDelta = completionOverlaySize;
+        panelRect.anchoredPosition = Vector2.zero;
+
+        GameObject accentObj = new GameObject("TopAccent");
+        accentObj.transform.SetParent(completionOverlayPanel.transform, false);
+        Image accentImage = accentObj.AddComponent<Image>();
+        accentImage.color = completionOverlayAccentColor;
+        RectTransform accentRect = accentObj.GetComponent<RectTransform>();
+        accentRect.sizeDelta = new Vector2(completionOverlaySize.x * 0.86f, 12f);
+        accentRect.anchoredPosition = new Vector2(0f, (completionOverlaySize.y * 0.5f) - 28f);
+
+        GameObject titleObj = new GameObject("CompletionTitle");
+        titleObj.transform.SetParent(completionOverlayPanel.transform, false);
+        completionOverlayTitle = titleObj.AddComponent<Text>();
+        completionOverlayTitle.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        completionOverlayTitle.fontSize = completionTitleFontSize;
+        completionOverlayTitle.fontStyle = FontStyle.Bold;
+        completionOverlayTitle.color = completionOverlayTextColor;
+        completionOverlayTitle.alignment = TextAnchor.MiddleCenter;
+        completionOverlayTitle.horizontalOverflow = HorizontalWrapMode.Wrap;
+        completionOverlayTitle.verticalOverflow = VerticalWrapMode.Overflow;
+        RectTransform titleRect = completionOverlayTitle.GetComponent<RectTransform>();
+        titleRect.sizeDelta = new Vector2(completionOverlaySize.x - 80f, 90f);
+        titleRect.anchoredPosition = new Vector2(0f, (completionOverlaySize.y * 0.5f) - 88f);
+
+        GameObject bodyObj = new GameObject("CompletionBody");
+        bodyObj.transform.SetParent(completionOverlayPanel.transform, false);
+        completionOverlayBody = bodyObj.AddComponent<Text>();
+        completionOverlayBody.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        completionOverlayBody.fontSize = completionBodyFontSize;
+        completionOverlayBody.color = completionOverlayTextColor;
+        completionOverlayBody.alignment = TextAnchor.UpperLeft;
+        completionOverlayBody.horizontalOverflow = HorizontalWrapMode.Wrap;
+        completionOverlayBody.verticalOverflow = VerticalWrapMode.Overflow;
+        RectTransform bodyRect = completionOverlayBody.GetComponent<RectTransform>();
+        bodyRect.sizeDelta = new Vector2(completionOverlaySize.x - 100f, completionOverlaySize.y - 180f);
+        bodyRect.anchoredPosition = new Vector2(0f, -34f);
+
+        completionOverlayCanvas.SetActive(false);
+        UpdateCompletionOverlayPose();
+    }
+
+    void UpdateCompletionOverlayPose()
+    {
+        if (completionOverlayCanvas == null || cameraTransform == null)
+            return;
+
+        completionOverlayCanvas.transform.SetParent(cameraTransform, false);
+        completionOverlayCanvas.transform.localPosition = new Vector3(0f, completionOverlayVerticalOffset, Mathf.Max(0.6f, completionOverlayDistance));
+        completionOverlayCanvas.transform.localRotation = Quaternion.identity;
+    }
+
+    void UpdateCompletionOverlayState()
+    {
+        if (!autoShowCompletionOverlay || waypointManager == null)
+        {
+            HideCompletionOverlay();
+            completionOverlayShown = false;
+            return;
+        }
+
+        if (waypointManager.IsSessionActive)
+        {
+            completionOverlayShown = false;
+            HideCompletionOverlay();
+            return;
+        }
+
+        if (!waypointManager.IsSessionCompleted)
+        {
+            completionOverlayShown = false;
+            HideCompletionOverlay();
+            return;
+        }
+
+        if (completionOverlayShown)
+            return;
+
+        string statsText = waypointManager.GetStatsText();
+        if (string.IsNullOrWhiteSpace(statsText))
+            return;
+
+        EnsureCompletionOverlay();
+        ApplyCompletionOverlayText(statsText);
+
+        completionOverlayCanvas.SetActive(true);
+        completionOverlayShown = true;
+    }
+
+    void HideCompletionOverlay()
+    {
+        if (completionOverlayCanvas != null && completionOverlayCanvas.activeSelf)
+        {
+            completionOverlayCanvas.SetActive(false);
+        }
+    }
+
+    void ApplyCompletionOverlayText(string statsText)
+    {
+        if (completionOverlayTitle == null || completionOverlayBody == null)
+            return;
+
+        string[] lines = statsText.Split('\n');
+        if (lines.Length == 0)
+        {
+            completionOverlayTitle.text = "Session Summary";
+            completionOverlayBody.text = statsText;
+            return;
+        }
+
+        completionOverlayTitle.text = lines[0];
+
+        string accentHex = ColorUtility.ToHtmlStringRGB(completionOverlayAccentColor);
+        System.Text.StringBuilder bodyBuilder = new System.Text.StringBuilder();
+
+        for (int i = 1; i < lines.Length; i++)
+        {
+            string line = lines[i];
+            if (string.IsNullOrWhiteSpace(line))
+                continue;
+
+            int separatorIndex = line.IndexOf(':');
+            if (separatorIndex > 0)
+            {
+                string key = line.Substring(0, separatorIndex).Trim();
+                string value = line.Substring(separatorIndex + 1).Trim();
+                bodyBuilder.Append("<color=#");
+                bodyBuilder.Append(accentHex);
+                bodyBuilder.Append("><b>");
+                bodyBuilder.Append(key);
+                bodyBuilder.Append(":</b></color> ");
+                bodyBuilder.Append(value);
+            }
+            else
+            {
+                bodyBuilder.Append(line.Trim());
+            }
+
+            if (i < lines.Length - 1)
+            {
+                bodyBuilder.Append("\n\n");
+            }
+        }
+
+        completionOverlayBody.text = bodyBuilder.ToString();
     }
 
     void SetupVoiceCommands()
