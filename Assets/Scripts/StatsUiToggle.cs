@@ -75,6 +75,8 @@ public class StatsUiToggle : MonoBehaviour
     public Color completionOverlayTextColor = new Color(0.94f, 0.97f, 1f, 1f);
     public int completionTitleFontSize = 46;
     public int completionBodyFontSize = 34;
+    public int completionTitleMinFontSize = 24;
+    public int completionBodyMinFontSize = 18;
 
     private GameObject canvasObj;
     private GameObject panelObj;
@@ -904,6 +906,7 @@ public class StatsUiToggle : MonoBehaviour
 
         Image panelImage = completionOverlayPanel.AddComponent<Image>();
         panelImage.color = completionOverlayBackgroundColor;
+        completionOverlayPanel.AddComponent<RectMask2D>();
 
         RectTransform panelRect = completionOverlayPanel.GetComponent<RectTransform>();
         panelRect.sizeDelta = completionOverlaySize;
@@ -926,7 +929,10 @@ public class StatsUiToggle : MonoBehaviour
         completionOverlayTitle.color = completionOverlayTextColor;
         completionOverlayTitle.alignment = TextAnchor.MiddleCenter;
         completionOverlayTitle.horizontalOverflow = HorizontalWrapMode.Wrap;
-        completionOverlayTitle.verticalOverflow = VerticalWrapMode.Overflow;
+        completionOverlayTitle.verticalOverflow = VerticalWrapMode.Truncate;
+        completionOverlayTitle.resizeTextForBestFit = true;
+        completionOverlayTitle.resizeTextMinSize = Mathf.Max(14, completionTitleMinFontSize);
+        completionOverlayTitle.resizeTextMaxSize = Mathf.Max(completionOverlayTitle.resizeTextMinSize, completionTitleFontSize);
         RectTransform titleRect = completionOverlayTitle.GetComponent<RectTransform>();
         titleRect.sizeDelta = new Vector2(completionOverlaySize.x - 80f, 90f);
         titleRect.anchoredPosition = new Vector2(0f, (completionOverlaySize.y * 0.5f) - 88f);
@@ -939,7 +945,11 @@ public class StatsUiToggle : MonoBehaviour
         completionOverlayBody.color = completionOverlayTextColor;
         completionOverlayBody.alignment = TextAnchor.UpperLeft;
         completionOverlayBody.horizontalOverflow = HorizontalWrapMode.Wrap;
-        completionOverlayBody.verticalOverflow = VerticalWrapMode.Overflow;
+        completionOverlayBody.verticalOverflow = VerticalWrapMode.Truncate;
+        completionOverlayBody.lineSpacing = 0.92f;
+        completionOverlayBody.resizeTextForBestFit = true;
+        completionOverlayBody.resizeTextMinSize = Mathf.Max(12, completionBodyMinFontSize);
+        completionOverlayBody.resizeTextMaxSize = Mathf.Max(completionOverlayBody.resizeTextMinSize, completionBodyFontSize);
         RectTransform bodyRect = completionOverlayBody.GetComponent<RectTransform>();
         bodyRect.sizeDelta = new Vector2(completionOverlaySize.x - 100f, completionOverlaySize.y - 180f);
         bodyRect.anchoredPosition = new Vector2(0f, -34f);
@@ -1046,7 +1056,7 @@ public class StatsUiToggle : MonoBehaviour
 
             if (i < lines.Length - 1)
             {
-                bodyBuilder.Append("\n\n");
+                bodyBuilder.Append("\n");
             }
         }
 
