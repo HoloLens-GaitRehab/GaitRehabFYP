@@ -12,7 +12,7 @@ public class StatsUiToggle : MonoBehaviour
     [Header("UI Layout")]
     public float uiDistance = 1.0f;
     public Vector3 uiOffset = new Vector3(0.35f, -0.25f, 0f); // bottom-right of view
-    public Vector2 panelSize = new Vector2(300f, 200f);
+    public Vector2 panelSize = new Vector2(340f, 260f);
     public Vector2 buttonSize = new Vector2(180f, 60f);
     public float followSpeed = 8f;
     public float rotateSpeed = 10f;
@@ -150,11 +150,13 @@ public class StatsUiToggle : MonoBehaviour
         textObj.transform.SetParent(panelObj.transform, false);
         panelText = textObj.AddComponent<Text>();
         panelText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        panelText.fontSize = 28;
+        panelText.fontSize = 24;
         panelText.color = Color.white;
         panelText.alignment = TextAnchor.MiddleCenter;
+        panelText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        panelText.verticalOverflow = VerticalWrapMode.Overflow;
         RectTransform textRect = panelText.GetComponent<RectTransform>();
-        textRect.sizeDelta = panelSize;
+        textRect.sizeDelta = panelSize - new Vector2(20f, 20f);
         textRect.anchoredPosition = Vector2.zero;
 
         if (useMrtkButtons && mrtkButtonPrefab != null)
