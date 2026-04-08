@@ -6,6 +6,10 @@ public class OffCourseTracker
     public float OffCourseTimeSeconds { get; private set; }
     public float CurrentLateralDistance { get; private set; }
     public float CurrentSignedLateralDistance { get; private set; }
+    public float MaxLateralDistance { get; private set; }
+    public float AverageLateralDistance { get; private set; }
+    private float lateralDistanceIntegral;
+    private float lateralDistanceSampleTime;
 
     public void Reset()
     {
@@ -13,6 +17,10 @@ public class OffCourseTracker
         OffCourseTimeSeconds = 0f;
         CurrentLateralDistance = 0f;
         CurrentSignedLateralDistance = 0f;
+        MaxLateralDistance = 0f;
+        AverageLateralDistance = 0f;
+        lateralDistanceIntegral = 0f;
+        lateralDistanceSampleTime = 0f;
     }
 
     public void Update(
@@ -29,6 +37,14 @@ public class OffCourseTracker
 
         CurrentSignedLateralDistance = SignedDistanceToInfiniteLineXZ(playerPosition, lineStart, lineEnd);
         CurrentLateralDistance = Mathf.Abs(CurrentSignedLateralDistance);
+        MaxLateralDistance = Mathf.Max(MaxLateralDistance, CurrentLateralDistance);
+
+        lateralDistanceIntegral += CurrentLateralDistance * deltaTime;
+        lateralDistanceSampleTime += deltaTime;
+        if (lateralDistanceSampleTime > 0f)
+        {
+            AverageLateralDistance = lateralDistanceIntegral / lateralDistanceSampleTime;
+        }
 
         if (trackOffCourse)
         {
