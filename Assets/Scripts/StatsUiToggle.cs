@@ -66,9 +66,10 @@ public class StatsUiToggle : MonoBehaviour
 
     [Header("Completion Overlay")]
     public bool autoShowCompletionOverlay = true;
-    public float completionOverlayDistance = 1.25f;
+    public float completionOverlayDistance = 3.3f;
     public float completionOverlayVerticalOffset = 0.02f;
     public Vector2 completionOverlaySize = new Vector2(760f, 440f);
+    public float completionOverlayScale = 0.00135f;
     public Color completionOverlayBackgroundColor = new Color(0.03f, 0.07f, 0.12f, 0.9f);
     public Color completionOverlayAccentColor = new Color(0.16f, 0.86f, 0.66f, 0.95f);
     public Color completionOverlayTextColor = new Color(0.94f, 0.97f, 1f, 1f);
@@ -893,7 +894,7 @@ public class StatsUiToggle : MonoBehaviour
         overlayCanvas.renderMode = RenderMode.WorldSpace;
         completionOverlayCanvas.AddComponent<CanvasScaler>();
         completionOverlayCanvas.AddComponent<GraphicRaycaster>();
-        completionOverlayCanvas.transform.localScale = Vector3.one * 0.0019f;
+        completionOverlayCanvas.transform.localScale = Vector3.one * Mathf.Clamp(completionOverlayScale, 0.0007f, 0.003f);
 
         RectTransform canvasRect = completionOverlayCanvas.GetComponent<RectTransform>();
         canvasRect.sizeDelta = completionOverlaySize;
@@ -953,7 +954,7 @@ public class StatsUiToggle : MonoBehaviour
             return;
 
         completionOverlayCanvas.transform.SetParent(cameraTransform, false);
-        completionOverlayCanvas.transform.localPosition = new Vector3(0f, completionOverlayVerticalOffset, Mathf.Max(0.6f, completionOverlayDistance));
+        completionOverlayCanvas.transform.localPosition = new Vector3(0f, completionOverlayVerticalOffset, Mathf.Max(2.2f, completionOverlayDistance));
         completionOverlayCanvas.transform.localRotation = Quaternion.identity;
     }
 
