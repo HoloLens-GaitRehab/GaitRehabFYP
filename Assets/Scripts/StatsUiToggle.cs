@@ -7,6 +7,7 @@ public class StatsUiToggle : MonoBehaviour
 {
     [Header("References")]
     public WaypointSystemManager waypointManager;
+    public RehabUiTheme uiTheme;
 
     [Header("UI Layout")]
     public float uiDistance = 1.0f;
@@ -18,6 +19,9 @@ public class StatsUiToggle : MonoBehaviour
     public float followAngleThreshold = 10f; // degrees
     public float followDistanceThreshold = 0.15f; // meters
     public bool followPositionOnly = true;
+    public Color statsPanelBackgroundColor = new Color(0f, 0f, 0f, 0.6f);
+    public Color statsPanelTextColor = Color.white;
+    public int statsPanelFontSize = 24;
 
     [Header("MRTK Buttons")]
     public bool useMrtkButtons = true;
@@ -25,6 +29,8 @@ public class StatsUiToggle : MonoBehaviour
     public Vector3 statsButtonLocalPos = new Vector3(0f, -0.07f, 0f);
     public Vector3 metronomeButtonLocalPos = new Vector3(0f, -0.16f, 0f);
     public Vector3 mrtkButtonScale = new Vector3(0.06f, 0.06f, 0.06f);
+    public Color statsButtonFallbackColor = new Color(0f, 0.6f, 0.1f, 0.9f);
+    public Color metronomeButtonFallbackColor = new Color(0.1f, 0.3f, 0.8f, 0.9f);
 
     [Header("Start Session Button")]
     public bool showStartSessionButton = true;
@@ -76,6 +82,8 @@ public class StatsUiToggle : MonoBehaviour
     public int completionBodyFontSize = 34;
     public int completionTitleMinFontSize = 24;
     public int completionBodyMinFontSize = 18;
+    [Range(0.05f, 1.2f)] public float completionOverlayFadeSeconds = 0.28f;
+    [Range(0.75f, 1f)] public float completionOverlayEntryScale = 0.93f;
 
     private GameObject canvasObj;
     private GameObject panelObj;
@@ -100,6 +108,7 @@ public class StatsUiToggle : MonoBehaviour
         }
 
         cameraTransform = Camera.main != null ? Camera.main.transform : null;
+        ApplyThemeIfPresent();
 
         CreateUi();
         EnsureCompletionOverlay();
@@ -132,7 +141,7 @@ public class StatsUiToggle : MonoBehaviour
         panelObj = new GameObject("StatsPanel");
         panelObj.transform.SetParent(canvasObj.transform, false);
         Image panelImage = panelObj.AddComponent<Image>();
-        panelImage.color = new Color(0f, 0f, 0f, 0.6f);
+        panelImage.color = statsPanelBackgroundColor;
         RectTransform panelRect = panelObj.GetComponent<RectTransform>();
         panelRect.sizeDelta = panelSize;
         panelRect.anchoredPosition = new Vector2(0f, 60f);
@@ -142,8 +151,8 @@ public class StatsUiToggle : MonoBehaviour
         textObj.transform.SetParent(panelObj.transform, false);
         panelText = textObj.AddComponent<Text>();
         panelText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
-        panelText.fontSize = 24;
-        panelText.color = Color.white;
+        panelText.fontSize = statsPanelFontSize;
+        panelText.color = statsPanelTextColor;
         panelText.alignment = TextAnchor.MiddleCenter;
         panelText.horizontalOverflow = HorizontalWrapMode.Wrap;
         panelText.verticalOverflow = VerticalWrapMode.Overflow;
@@ -162,7 +171,7 @@ public class StatsUiToggle : MonoBehaviour
             GameObject buttonObj = new GameObject("StatsToggleButton");
             buttonObj.transform.SetParent(canvasObj.transform, false);
             Image buttonImage = buttonObj.AddComponent<Image>();
-            buttonImage.color = new Color(0f, 0.6f, 0.1f, 0.9f);
+            buttonImage.color = statsButtonFallbackColor;
             toggleButton = buttonObj.AddComponent<Button>();
             RectTransform buttonRect = buttonObj.GetComponent<RectTransform>();
             buttonRect.sizeDelta = buttonSize;
@@ -187,7 +196,7 @@ public class StatsUiToggle : MonoBehaviour
             GameObject metroBtnObj = new GameObject("MetronomeToggleButton");
             metroBtnObj.transform.SetParent(canvasObj.transform, false);
             Image metroBtnImage = metroBtnObj.AddComponent<Image>();
-            metroBtnImage.color = new Color(0.1f, 0.3f, 0.8f, 0.9f);
+            metroBtnImage.color = metronomeButtonFallbackColor;
             metronomeButton = metroBtnObj.AddComponent<Button>();
             RectTransform metroBtnRect = metroBtnObj.GetComponent<RectTransform>();
             metroBtnRect.sizeDelta = buttonSize;
@@ -280,8 +289,43 @@ public class StatsUiToggle : MonoBehaviour
             completionTitleFontSize = completionTitleFontSize,
             completionBodyFontSize = completionBodyFontSize,
             completionTitleMinFontSize = completionTitleMinFontSize,
-            completionBodyMinFontSize = completionBodyMinFontSize
+            completionBodyMinFontSize = completionBodyMinFontSize,
+            completionFadeSeconds = completionOverlayFadeSeconds,
+            completionEntryScale = completionOverlayEntryScale
         };
+    }
+
+    void ApplyThemeIfPresent()
+    {
+        if (uiTheme == null)
+            return;
+
+        statsPanelBackgroundColor = uiTheme.statsPanelBackgroundColor;
+        statsPanelTextColor = uiTheme.statsPanelTextColor;
+        statsPanelFontSize = uiTheme.statsPanelFontSize;
+
+        statsButtonFallbackColor = uiTheme.statsButtonColor;
+        metronomeButtonFallbackColor = uiTheme.metronomeButtonColor;
+
+        completionOverlayBackgroundColor = uiTheme.completionBackgroundColor;
+        completionOverlayAccentColor = uiTheme.completionAccentColor;
+        completionOverlayTextColor = uiTheme.completionTextColor;
+        completionOverlayDistance = uiTheme.completionDistance;
+        completionOverlayScale = uiTheme.completionScale;
+        completionOverlaySize = uiTheme.completionSize;
+        completionTitleFontSize = uiTheme.completionTitleFontSize;
+        completionBodyFontSize = uiTheme.completionBodyFontSize;
+        completionTitleMinFontSize = uiTheme.completionTitleMinFontSize;
+        completionBodyMinFontSize = uiTheme.completionBodyMinFontSize;
+        completionOverlayFadeSeconds = uiTheme.completionFadeSeconds;
+        completionOverlayEntryScale = uiTheme.completionEntryScale;
+
+        dwellBarBackgroundColor = uiTheme.startDwellBackgroundColor;
+        dwellBarFillColor = uiTheme.startDwellFillColor;
+        sessionControlBarBackgroundColor = uiTheme.sessionDwellBackgroundColor;
+        sessionControlBarPauseColor = uiTheme.sessionDwellPauseColor;
+        sessionControlBarResumeColor = uiTheme.sessionDwellResumeColor;
+        sessionControlBarEndColor = uiTheme.sessionDwellEndColor;
     }
 
     SessionDwellControlController.Settings GetSessionDwellControlSettings()

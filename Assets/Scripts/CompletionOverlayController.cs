@@ -18,16 +18,24 @@ public class CompletionOverlayController
         public int completionBodyFontSize;
         public int completionTitleMinFontSize;
         public int completionBodyMinFontSize;
+        public float completionFadeSeconds;
+        public float completionEntryScale;
     }
 
     private GameObject completionOverlayCanvas;
+    private CanvasGroup completionOverlayCanvasGroup;
     private Text completionOverlayTitle;
     private Text completionOverlayBody;
     private bool completionOverlayShown;
+    private bool overlayTargetVisible;
+    private float overlayVisibility;
+    private float baseScale = 0.0013f;
 
     public void ResetForNewSession()
     {
         completionOverlayShown = false;
+        overlayTargetVisible = false;
+        overlayVisibility = 0f;
         Hide();
     }
 
@@ -41,6 +49,8 @@ public class CompletionOverlayController
         overlayCanvas.renderMode = RenderMode.WorldSpace;
         completionOverlayCanvas.AddComponent<CanvasScaler>();
         completionOverlayCanvas.AddComponent<GraphicRaycaster>();
+        completionOverlayCanvasGroup = completionOverlayCanvas.AddComponent<CanvasGroup>();
+        completionOverlayCanvasGroup.alpha = 0f;
 
         RectTransform canvasRect = completionOverlayCanvas.GetComponent<RectTransform>();
         canvasRect.sizeDelta = settings.completionOverlaySize;
@@ -110,57 +120,95 @@ public class CompletionOverlayController
             return;
 
         completionOverlayCanvas.transform.SetParent(cameraTransform, false);
-        completionOverlayCanvas.transform.localScale = Vector3.one * Mathf.Clamp(settings.completionOverlayScale, 0.0007f, 0.003f);
+        baseScale = Mathf.Clamp(settings.completionOverlayScale, 0.0007f, 0.003f);
         completionOverlayCanvas.transform.localPosition = new Vector3(
             0f,
             settings.completionOverlayVerticalOffset,
             Mathf.Max(2.2f, settings.completionOverlayDistance));
         completionOverlayCanvas.transform.localRotation = Quaternion.identity;
+        ApplyAnimatedScale(settings);
     }
 
     public void UpdateState(WaypointSystemManager waypointManager, Transform cameraTransform, Settings settings)
     {
-        if (!settings.autoShowCompletionOverlay || waypointManager == null)
+        bool shouldShow = false;
+        string statsText = null;
+
+        if (settings.autoShowCompletionOverlay && waypointManager != null)
         {
-            completionOverlayShown = false;
-            Hide();
-            return;
+            bool eligible = !waypointManager.IsSessionActive && waypointManager.IsSessionCompleted;
+            if (eligible)
+            {
+                statsText = waypointManager.GetStatsText();
+                shouldShow = !string.IsNullOrWhiteSpace(statsText);
+            }
         }
 
-        if (waypointManager.IsSessionActive)
+        if (shouldShow)
+        {
+            Ensure(cameraTransform, settings);
+            if (!completionOverlayShown)
+            {
+                ApplyText(statsText, settings.completionOverlayAccentColor);
+                completionOverlayShown = true;
+            }
+        }
+        else
         {
             completionOverlayShown = false;
-            Hide();
-            return;
         }
 
-        if (!waypointManager.IsSessionCompleted)
-        {
-            completionOverlayShown = false;
-            Hide();
-            return;
-        }
-
-        if (completionOverlayShown)
-            return;
-
-        string statsText = waypointManager.GetStatsText();
-        if (string.IsNullOrWhiteSpace(statsText))
-            return;
-
-        Ensure(cameraTransform, settings);
-        ApplyText(statsText, settings.completionOverlayAccentColor);
-
-        completionOverlayCanvas.SetActive(true);
-        completionOverlayShown = true;
+        overlayTargetVisible = shouldShow;
+        Animate(settings);
     }
 
     public void Hide()
     {
+        overlayTargetVisible = false;
+        overlayVisibility = 0f;
+
+        if (completionOverlayCanvasGroup != null)
+            completionOverlayCanvasGroup.alpha = 0f;
+
         if (completionOverlayCanvas != null && completionOverlayCanvas.activeSelf)
+            completionOverlayCanvas.SetActive(false);
+    }
+
+    private void Animate(Settings settings)
+    {
+        if (completionOverlayCanvas == null)
+            return;
+
+        if (overlayTargetVisible && !completionOverlayCanvas.activeSelf)
+        {
+            completionOverlayCanvas.SetActive(true);
+        }
+
+        float fadeDuration = Mathf.Max(0.05f, settings.completionFadeSeconds);
+        float delta = Time.deltaTime / fadeDuration;
+        overlayVisibility = Mathf.MoveTowards(overlayVisibility, overlayTargetVisible ? 1f : 0f, delta);
+
+        float eased = overlayVisibility * overlayVisibility * (3f - (2f * overlayVisibility));
+        if (completionOverlayCanvasGroup != null)
+            completionOverlayCanvasGroup.alpha = eased;
+
+        ApplyAnimatedScale(settings);
+
+        if (!overlayTargetVisible && overlayVisibility <= 0.001f && completionOverlayCanvas.activeSelf)
         {
             completionOverlayCanvas.SetActive(false);
         }
+    }
+
+    private void ApplyAnimatedScale(Settings settings)
+    {
+        if (completionOverlayCanvas == null)
+            return;
+
+        float eased = overlayVisibility * overlayVisibility * (3f - (2f * overlayVisibility));
+        float entryScale = Mathf.Clamp(settings.completionEntryScale, 0.75f, 1f);
+        float scaleFactor = Mathf.Lerp(entryScale, 1f, eased);
+        completionOverlayCanvas.transform.localScale = Vector3.one * (baseScale * scaleFactor);
     }
 
     private void ApplyText(string statsText, Color accentColor)
