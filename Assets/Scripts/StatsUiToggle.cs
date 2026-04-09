@@ -2,6 +2,8 @@ using UnityEngine;
 using UnityEngine.UI;
 using Microsoft.MixedReality.Toolkit.UI;
 using TMPro;
+using System;
+using System.IO;
 
 public class StatsUiToggle : MonoBehaviour
 {
@@ -89,6 +91,10 @@ public class StatsUiToggle : MonoBehaviour
     [Range(0.05f, 1.2f)] public float completionOverlayFadeSeconds = 0.28f;
     [Range(0.75f, 1f)] public float completionOverlayEntryScale = 0.93f;
 
+    [Header("Startup CSV Test")]
+    public bool writeStartupSampleCsvOnLaunch = true;
+    public string startupSampleCsvFileName = "startup_usb_test.csv";
+
     private GameObject canvasObj;
     private GameObject panelObj;
     private Text panelText;
@@ -119,6 +125,7 @@ public class StatsUiToggle : MonoBehaviour
         EnsureCompletionOverlay();
         startSessionControlController.EnsureCreated(cameraTransform, GetStartSessionControlSettings(), OnStartSessionPressed);
         SetupVoiceCommands();
+        WriteStartupSampleCsv();
     }
 
     void CreateUi()
@@ -513,6 +520,63 @@ public class StatsUiToggle : MonoBehaviour
     void OnDestroy()
     {
         voiceCommandController.Dispose();
+    }
+
+    void WriteStartupSampleCsv()
+    {
+        if (!writeStartupSampleCsvOnLaunch)
+            return;
+
+        try
+        {
+            string fileName = string.IsNullOrWhiteSpace(startupSampleCsvFileName)
+                ? "startup_usb_test.csv"
+                : startupSampleCsvFileName.Trim();
+
+            if (!fileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+            {
+                fileName += ".csv";
+            }
+
+            string csvPath = Path.Combine(Application.persistentDataPath, fileName);
+            bool fileExists = File.Exists(csvPath);
+
+            using (StreamWriter writer = new StreamWriter(csvPath, true))
+            {
+                if (!fileExists)
+                {
+                    writer.WriteLine("timestamp_utc,device_model,app_version,unity_version,note");
+                }
+
+                string row = string.Format(
+                    "{0},{1},{2},{3},{4}",
+                    EscapeCsv(DateTime.UtcNow.ToString("O")),
+                    EscapeCsv(SystemInfo.deviceModel),
+                    EscapeCsv(Application.version),
+                    EscapeCsv(Application.unityVersion),
+                    EscapeCsv("startup_test"));
+
+                writer.WriteLine(row);
+            }
+
+            Debug.Log("[StatsUiToggle] Startup sample CSV written to: " + csvPath);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogWarning("[StatsUiToggle] Failed to write startup sample CSV: " + ex.Message);
+        }
+    }
+
+    static string EscapeCsv(string value)
+    {
+        if (string.IsNullOrEmpty(value))
+            return string.Empty;
+
+        bool needsQuotes = value.IndexOfAny(new[] { ',', '"', '\n', '\r' }) >= 0;
+        if (!needsQuotes)
+            return value;
+
+        return "\"" + value.Replace("\"", "\"\"") + "\"";
     }
 
     GameObject CreateMrtkButton(string name, Vector3 localPos, string label, UnityEngine.Events.UnityAction onClick)
