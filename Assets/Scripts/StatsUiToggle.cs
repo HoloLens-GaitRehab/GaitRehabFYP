@@ -2,13 +2,6 @@ using UnityEngine;
 using UnityEngine.UI;
 using Microsoft.MixedReality.Toolkit.UI;
 using TMPro;
-using System;
-using System.IO;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-#if WINDOWS_UWP
-using Windows.Storage;
-#endif
 
 public class StatsUiToggle : MonoBehaviour
 {
@@ -97,10 +90,14 @@ public class StatsUiToggle : MonoBehaviour
     [Range(0.75f, 1f)] public float completionOverlayEntryScale = 0.93f;
 
     [Header("Startup CSV Test")]
-    public bool writeStartupSampleCsvOnLaunch = true;
+    public bool writeStartupSampleCsvOnLaunch = false;
     public string startupSampleCsvFileName = "startup_usb_test.csv";
     public string startupPicturesFolderName = "GaitRehabFYP_CSV";
     public bool writeUsbVisibleCsvCopyOnLaunch = false;
+
+    [Header("Session Metrics CSV")]
+    public bool writeSessionMetricsCsvOnSessionComplete = true;
+    public string sessionMetricsCsvFileName = "session_metrics.csv";
 
     private GameObject canvasObj;
     private GameObject panelObj;
@@ -113,6 +110,9 @@ public class StatsUiToggle : MonoBehaviour
     private CompletionOverlayController completionOverlayController = new CompletionOverlayController();
     private SessionDwellControlController sessionDwellControlController = new SessionDwellControlController();
     private StartSessionControlController startSessionControlController = new StartSessionControlController();
+    private StartupCsvController startupCsvController = new StartupCsvController();
+    private SessionMetricsCsvController sessionMetricsCsvController = new SessionMetricsCsvController();
+    private CsvExportService csvExportService = new CsvExportService();
     private VoiceCommandController voiceCommandController = new VoiceCommandController();
     private UiFollowController uiFollowController = new UiFollowController();
     private Transform cameraTransform;
@@ -246,6 +246,7 @@ public class StatsUiToggle : MonoBehaviour
         startSessionControlController.Update(cameraTransform, waypointManager, GetStartSessionControlSettings(), OnStartSessionPressed);
         UpdateSessionDwellControls();
         UpdateCompletionOverlayState();
+        UpdateSessionMetricsCsvLogging();
 
         if (panelObj == null || panelText == null)
             return;
@@ -401,6 +402,24 @@ public class StatsUiToggle : MonoBehaviour
         };
     }
 
+    StartupCsvController.Settings GetStartupCsvSettings()
+    {
+        return new StartupCsvController.Settings
+        {
+            writeOnLaunch = writeStartupSampleCsvOnLaunch,
+            fileName = startupSampleCsvFileName
+        };
+    }
+
+    SessionMetricsCsvController.Settings GetSessionMetricsCsvSettings()
+    {
+        return new SessionMetricsCsvController.Settings
+        {
+            writeOnSessionComplete = writeSessionMetricsCsvOnSessionComplete,
+            fileName = sessionMetricsCsvFileName
+        };
+    }
+
     void TogglePanel()
     {
         if (panelObj == null)
@@ -529,217 +548,25 @@ public class StatsUiToggle : MonoBehaviour
         voiceCommandController.Dispose();
     }
 
+    void UpdateSessionMetricsCsvLogging()
+    {
+        sessionMetricsCsvController.Update(
+            waypointManager,
+            GetSessionMetricsCsvSettings(),
+            csvExportService,
+            startupPicturesFolderName,
+            writeUsbVisibleCsvCopyOnLaunch,
+            Application.persistentDataPath);
+    }
+
     void WriteStartupSampleCsv()
     {
-        if (!writeStartupSampleCsvOnLaunch)
-            return;
-
-        try
-        {
-            string fileName = SanitizeCsvFileName(startupSampleCsvFileName);
-
-            string header = "timestamp_utc,device_model,app_version,unity_version,note";
-            string row = string.Format(
-                "{0},{1},{2},{3},{4}",
-                EscapeCsv(DateTime.UtcNow.ToString("O")),
-                EscapeCsv(SystemInfo.deviceModel),
-                EscapeCsv(Application.version),
-                EscapeCsv(Application.unityVersion),
-                EscapeCsv("startup_test"));
-
-#if WINDOWS_UWP
-            _ = WriteStartupSampleCsvToPicturesAsync(fileName, header, row);
-#else
-            TryWriteStartupCsvToPersistent(fileName, header, row);
-#endif
-        }
-        catch (Exception ex)
-        {
-            Debug.LogWarning("[StatsUiToggle] Failed to write startup sample CSV: " + ex.Message);
-        }
-    }
-
-#if WINDOWS_UWP
-    async Task WriteStartupSampleCsvToPicturesAsync(string fileName, string header, string row)
-    {
-        try
-        {
-            string folderName = string.IsNullOrWhiteSpace(startupPicturesFolderName)
-                ? "GaitRehabFYP_CSV"
-                : startupPicturesFolderName.Trim();
-
-            StorageFolder rootFolder = await KnownFolders.PicturesLibrary.CreateFolderAsync(
-                folderName,
-                CreationCollisionOption.OpenIfExists);
-            StorageFile csvFile = await rootFolder.CreateFileAsync(fileName, CreationCollisionOption.OpenIfExists);
-
-            bool shouldWriteHeader = false;
-            var properties = await csvFile.GetBasicPropertiesAsync();
-            shouldWriteHeader = properties.Size == 0;
-
-            if (shouldWriteHeader)
-            {
-                await FileIO.AppendTextAsync(csvFile, header + Environment.NewLine);
-            }
-
-            await FileIO.AppendTextAsync(csvFile, row + Environment.NewLine);
-            Debug.Log("[StatsUiToggle] Startup sample CSV written to PicturesLibrary: " + csvFile.Path);
-
-            if (writeUsbVisibleCsvCopyOnLaunch)
-            {
-                Debug.Log("[StatsUiToggle] USB copy toggle ignored on UWP because file is already in PicturesLibrary.");
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.LogWarning("[StatsUiToggle] PicturesLibrary CSV write failed: " + ex.Message + " | Falling back to persistent path.");
-            TryWriteStartupCsvToPersistent(fileName, header, row);
-        }
-    }
-#endif
-
-    void TryWriteStartupCsvToPersistent(string fileName, string header, string row)
-    {
-        try
-        {
-
-            string csvPath = Path.Combine(Application.persistentDataPath, fileName);
-            Debug.Log("[StatsUiToggle] CSV write target resolved to: " + csvPath + " (persistent root: " + Application.persistentDataPath + ")");
-            if (!TryAppendCsvRow(csvPath, header, row, out string persistentError, false))
-            {
-                Debug.LogWarning("[StatsUiToggle] Failed to write startup sample CSV to persistent path: " + persistentError);
-                return;
-            }
-
-            Debug.Log("[StatsUiToggle] Startup sample CSV written to: " + csvPath);
-
-            if (writeUsbVisibleCsvCopyOnLaunch)
-            {
-                bool wroteUsbCopy = false;
-                foreach (string folder in GetUsbVisibleCandidateFolders())
-                {
-                    string copyPath = Path.Combine(folder, fileName);
-                    if (TryAppendCsvRow(copyPath, header, row, out string copyError, true))
-                    {
-                        Debug.Log("[StatsUiToggle] USB-visible CSV copy written to: " + copyPath);
-                        wroteUsbCopy = true;
-                        break;
-                    }
-
-                    Debug.Log("[StatsUiToggle] USB copy attempt failed at: " + copyPath + " | " + copyError);
-                }
-
-                if (!wroteUsbCopy)
-                {
-                    Debug.LogWarning("[StatsUiToggle] Could not write a USB-visible CSV copy. Use persistent path or Device Portal fallback.");
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.LogWarning("[StatsUiToggle] Failed to write startup sample CSV to persistent path: " + ex.Message);
-        }
-    }
-
-    static bool TryAppendCsvRow(string csvPath, string header, string row, out string error, bool ensureDirectory)
-    {
-        try
-        {
-            string normalizedPath = csvPath
-                .Replace('\\', Path.DirectorySeparatorChar)
-                .Replace('/', Path.DirectorySeparatorChar);
-
-            string directory = Path.GetDirectoryName(normalizedPath);
-            if (ensureDirectory && !string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            bool fileExists = File.Exists(normalizedPath);
-            using (StreamWriter writer = new StreamWriter(normalizedPath, true))
-            {
-                if (!fileExists)
-                {
-                    writer.WriteLine(header);
-                }
-
-                writer.WriteLine(row);
-            }
-
-            error = null;
-            return true;
-        }
-        catch (Exception ex)
-        {
-            error = ex.Message;
-            return false;
-        }
-    }
-
-    static string SanitizeCsvFileName(string requestedName)
-    {
-        string fileName = string.IsNullOrWhiteSpace(requestedName)
-            ? "startup_usb_test.csv"
-            : requestedName.Trim();
-
-        // Only allow a file name. Ignore folder segments or rooted paths from inspector input.
-        fileName = Path.GetFileName(fileName);
-        if (string.IsNullOrWhiteSpace(fileName))
-        {
-            fileName = "startup_usb_test.csv";
-        }
-
-        char[] invalidChars = Path.GetInvalidFileNameChars();
-        for (int i = 0; i < invalidChars.Length; i++)
-        {
-            fileName = fileName.Replace(invalidChars[i], '_');
-        }
-
-        if (!fileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
-        {
-            fileName += ".csv";
-        }
-
-        return fileName;
-    }
-
-    static IEnumerable<string> GetUsbVisibleCandidateFolders()
-    {
-        HashSet<string> candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        string myDocuments = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
-        if (!string.IsNullOrWhiteSpace(myDocuments))
-            candidates.Add(myDocuments);
-
-        string commonDocuments = Environment.GetFolderPath(Environment.SpecialFolder.CommonDocuments);
-        if (!string.IsNullOrWhiteSpace(commonDocuments))
-            candidates.Add(commonDocuments);
-
-        string normalized = Application.persistentDataPath
-            .Replace('/', Path.DirectorySeparatorChar)
-            .Replace('\\', Path.DirectorySeparatorChar);
-        string appDataMarker = Path.DirectorySeparatorChar + "AppData" + Path.DirectorySeparatorChar + "Local" + Path.DirectorySeparatorChar + "Packages";
-        int markerIndex = normalized.IndexOf(appDataMarker, StringComparison.OrdinalIgnoreCase);
-        if (markerIndex > 0)
-        {
-            string userRoot = normalized.Substring(0, markerIndex);
-            candidates.Add(Path.Combine(userRoot, "Documents"));
-            candidates.Add(Path.Combine(userRoot, "Downloads"));
-        }
-
-        return candidates;
-    }
-
-    static string EscapeCsv(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-            return string.Empty;
-
-        bool needsQuotes = value.IndexOfAny(new[] { ',', '"', '\n', '\r' }) >= 0;
-        if (!needsQuotes)
-            return value;
-
-        return "\"" + value.Replace("\"", "\"\"") + "\"";
+        startupCsvController.WriteStartupSampleCsv(
+            GetStartupCsvSettings(),
+            csvExportService,
+            startupPicturesFolderName,
+            writeUsbVisibleCsvCopyOnLaunch,
+            Application.persistentDataPath);
     }
 
     GameObject CreateMrtkButton(string name, Vector3 localPos, string label, UnityEngine.Events.UnityAction onClick)
