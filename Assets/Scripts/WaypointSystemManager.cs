@@ -78,6 +78,16 @@ public class WaypointSystemManager : MonoBehaviour
     public bool IsSessionActive => sessionController.IsActive;
     public bool IsSessionCompleted => sessionController.IsCompleted;
     public bool IsSessionPaused => sessionController.IsPaused;
+    public string LastSessionCompletionTitle => sessionController.LastCompletionTitle;
+    public float LastSessionElapsedSeconds => sessionController.LastElapsedSeconds;
+    public float LastSessionDistanceMeters => sessionController.TotalDistanceTraveled;
+    public float LastSessionAverageSpeedMps => sessionController.LastAverageSpeedMps;
+    public float LastSessionPaceSecondsPerMeter => sessionController.LastPaceSecondsPerMeter;
+    public float LastSessionOnCoursePercent => sessionController.LastOnCoursePercent;
+    public float LastSessionOffCoursePercent => sessionController.LastOffCoursePercent;
+    public float LastSessionOffCourseSeconds => sessionController.LastOffCourseSeconds;
+    public float LastSessionDriftAverageMeters => sessionController.LastAverageLateralDistance;
+    public float LastSessionDriftMaxMeters => sessionController.LastMaxLateralDistance;
     
     void Start()
     {

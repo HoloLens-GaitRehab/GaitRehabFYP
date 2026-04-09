@@ -6,6 +6,15 @@ public class SessionController
     public bool IsCompleted { get; private set; }
     public bool IsPaused { get; private set; }
     public string FinalSessionStats { get; private set; } = "";
+    public string LastCompletionTitle { get; private set; } = "";
+    public float LastElapsedSeconds { get; private set; }
+    public float LastAverageSpeedMps { get; private set; }
+    public float LastPaceSecondsPerMeter { get; private set; }
+    public float LastOnCoursePercent { get; private set; }
+    public float LastOffCoursePercent { get; private set; }
+    public float LastOffCourseSeconds { get; private set; }
+    public float LastAverageLateralDistance { get; private set; }
+    public float LastMaxLateralDistance { get; private set; }
     public float SessionStartTime { get; private set; }
     public float TotalDistanceTraveled { get; private set; }
     public Vector3 LastCameraPosition { get; private set; }
@@ -18,6 +27,15 @@ public class SessionController
         IsCompleted = false;
         IsPaused = false;
         FinalSessionStats = "";
+        LastCompletionTitle = "";
+        LastElapsedSeconds = 0f;
+        LastAverageSpeedMps = 0f;
+        LastPaceSecondsPerMeter = 0f;
+        LastOnCoursePercent = 0f;
+        LastOffCoursePercent = 0f;
+        LastOffCourseSeconds = 0f;
+        LastAverageLateralDistance = 0f;
+        LastMaxLateralDistance = 0f;
         SessionStartTime = currentTime;
         TotalDistanceTraveled = 0f;
         LastCameraPosition = initialCameraPosition;
@@ -123,6 +141,16 @@ public class SessionController
         float avgSpeedMps = elapsed > 0.001f ? TotalDistanceTraveled / elapsed : 0f;
         float paceSecondsPerMeter = TotalDistanceTraveled > 0.001f ? elapsed / TotalDistanceTraveled : 0f;
         float onCoursePercent = Mathf.Clamp(100f - offCoursePercent, 0f, 100f);
+
+        LastCompletionTitle = completionTitle;
+        LastElapsedSeconds = elapsed;
+        LastAverageSpeedMps = avgSpeedMps;
+        LastPaceSecondsPerMeter = paceSecondsPerMeter;
+        LastOnCoursePercent = onCoursePercent;
+        LastOffCoursePercent = offCoursePercent;
+        LastOffCourseSeconds = offCourseSeconds;
+        LastAverageLateralDistance = averageLateralDistance;
+        LastMaxLateralDistance = maxLateralDistance;
 
         string offCourseSummary = trackOffCourse
             ? string.Format("Off-course: {0:F0}% ({1:F1}s)", offCoursePercent, offCourseSeconds)
