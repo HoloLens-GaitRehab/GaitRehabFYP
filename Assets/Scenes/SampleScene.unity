@@ -333,12 +333,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6cf9c09393233274fbfebf5986288db6, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  waypointPrefab: {fileID: 1938280002813897722, guid: d27a1d5c5ea285d4a875a9db6611c491,
-    type: 3}
-  totalWaypoints: 10
-  minDistance: 1
-  maxDistance: 3
-  waypointHeight: 1.5
+  requireManualStart: 1
+  lineEndReachDistance: 0.6
+  lineEndProgressPadding: 0.2
   statsText: {fileID: 0}
   autoCreateStatsText: 1
   statsDistanceFromCamera: 1.5
@@ -348,7 +345,43 @@ MonoBehaviour:
   enableMetronome: 0
   metronomePrefab: {fileID: 0}
   metronomeBPM: 60
+  metronomeSpeedMultiplier: 0.75
   metronomeColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+  metronomeHeightOffset: -0.3
+  showMetronomeArc: 1
+  metronomeArcColor: {r: 1, g: 1, b: 0, a: 0.5}
+  metronomeArcWidth: 0.01
+  metronomeArcSegments: 24
+  metronomeRedShiftDistance: 1
+  metronomeTickClip: {fileID: 0}
+  metronomeTickVolume: 0.2
+  useGeneratedTickFallback: 1
+  generatedTickFrequencyHz: 1300
+  generatedTickDurationSeconds: 0.03
+  straightGuideLineColor: {r: 0, g: 1, b: 0, a: 1}
+  straightGuideLineAlpha: 0.65
+  straightGuideLineWidth: 0.08
+  straightGuideLineLength: 15
+  straightGuideLineFloorOffset: 0.02
+  assumedEyeHeight: 1.6
+  enableLineEndMarker: 1
+  lineEndMarkerColor: {r: 1, g: 0.95, b: 0.2, a: 0.95}
+  lineEndMarkerHeight: 1.35
+  lineEndMarkerWidth: 0.055
+  enableConditionalRails: 1
+  railSpacing: 0.45
+  railWidth: 0.05
+  railBaseAlpha: 0.12
+  railMaxAlpha: 0.9
+  railsFollowOffCourseBoundary: 1
+  trackOffCourse: 1
+  offCourseTolerance: 0.25
+  enableDriftDirectionArrow: 1
+  driftArrowShowBuffer: 0.03
+  driftArrowDistance: 1.1
+  driftArrowVerticalOffset: -0.06
+  driftArrowScale: 0.02
+  driftArrowBaseColor: {r: 1, g: 1, b: 1, a: 1}
 --- !u!4 &1111534381
 Transform:
   m_ObjectHideFlags: 0
@@ -389,6 +422,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   waypointManager: {fileID: 1111534380}
+  uiTheme: {fileID: 0}
   uiDistance: 1.6
   uiOffset: {x: 0.35, y: -0.25, z: 0}
   panelSize: {x: 220, y: 120}
@@ -398,11 +432,78 @@ MonoBehaviour:
   followAngleThreshold: 10
   followDistanceThreshold: 0.15
   followPositionOnly: 1
+  statsPanelBackgroundColor: {r: 0, g: 0, b: 0, a: 0.6}
+  statsPanelTextColor: {r: 1, g: 1, b: 1, a: 1}
+  statsPanelFontSize: 24
+  autoHideStatsPanel: 1
+  statsPanelAutoHideSeconds: 10
   useMrtkButtons: 1
   mrtkButtonPrefab: {fileID: 0}
   statsButtonLocalPos: {x: 0, y: -0.07, z: 0}
   metronomeButtonLocalPos: {x: 0, y: -0.16, z: 0}
+  testFinishButtonLocalPos: {x: 0, y: -0.25, z: 0}
   mrtkButtonScale: {x: 0.06, y: 0.06, z: 0.06}
+  statsButtonFallbackColor: {r: 0, g: 0.6, b: 0.1, a: 0.9}
+  metronomeButtonFallbackColor: {r: 0.1, g: 0.3, b: 0.8, a: 0.9}
+  testFinishButtonFallbackColor: {r: 0.8, g: 0.35, b: 0.15, a: 0.9}
+  showForceCompleteTestButton: 1
+  showStartSessionButton: 1
+  startButtonDistance: 1
+  startButtonOffset: {x: 0, y: 0.2, z: 0}
+  followStartButtonVerticalGaze: 0
+  startButtonMinHeightAboveEyes: 0.4
+  hideStartButtonAfterStart: 1
+  useDwellStart: 1
+  startDwellSeconds: 1.5
+  startGazeAngleThreshold: 8
+  startGazeMaxDistance: 2.5
+  dwellBarWidth: 0.16
+  dwellBarHeight: 0.015
+  dwellBarDepth: 0.005
+  dwellBarVerticalOffset: -0.07
+  dwellBarBackgroundColor: {r: 0, g: 0, b: 0, a: 0.75}
+  dwellBarFillColor: {r: 0.2, g: 0.9, b: 0.2, a: 0.95}
+  useDwellSessionControls: 1
+  sessionControlDwellSeconds: 1.1
+  sessionEndDwellSeconds: 2.4
+  sessionControlLookUpAngle: 25
+  sessionControlCooldownSeconds: 0.8
+  requirePauseBeforeEnd: 1
+  sessionControlBarDistance: 0.9
+  sessionControlBarVerticalOffset: 0.12
+  sessionControlBarWidth: 0.16
+  sessionControlBarHeight: 0.014
+  sessionControlBarDepth: 0.005
+  sessionControlBarBackgroundColor: {r: 0, g: 0, b: 0, a: 0.78}
+  sessionControlBarPauseColor: {r: 1, g: 0.8, b: 0.2, a: 0.95}
+  sessionControlBarResumeColor: {r: 0.2, g: 0.9, b: 0.35, a: 0.95}
+  sessionControlBarEndColor: {r: 1, g: 0.3, b: 0.3, a: 0.95}
+  autoShowCompletionOverlay: 1
+  completionOverlayDistance: 3.3
+  completionOverlayVerticalOffset: 0.02
+  completionOverlaySize: {x: 760, y: 440}
+  completionOverlayScale: 0.00135
+  completionOverlayBackgroundColor: {r: 0.03, g: 0.07, b: 0.12, a: 0.9}
+  completionOverlayAccentColor: {r: 0.16, g: 0.86, b: 0.66, a: 0.95}
+  completionOverlayTextColor: {r: 0.94, g: 0.97, b: 1, a: 1}
+  completionTitleFontSize: 46
+  completionBodyFontSize: 34
+  completionTitleMinFontSize: 24
+  completionBodyMinFontSize: 18
+  completionOverlayFadeSeconds: 0.28
+  completionOverlayEntryScale: 0.93
+  writeStartupSampleCsvOnLaunch: 1
+  startupSampleCsvFileName: startup_usb_test.csv
+  startupPicturesFolderName: GaitRehabFYP_CSV
+  writeUsbVisibleCsvCopyOnLaunch: 0
+  writeSessionMetricsCsvOnSessionComplete: 1
+  sessionMetricsCsvFileName: session_metrics.csv
+  writeSampleSessionMetricsOnLaunch: 1
+  sampleSessionMetricsRowCount: 12
+  uploadSessionMetricsCsvToBackend: 1
+  backendSessionCsvUploadUrl: http://192.168.1.119:4000/api/sessions/upload
+  backendSessionCsvUploadTimeoutSeconds: 20
+  uploadSampleSessionMetricsCsvOnLaunch: 0
 --- !u!1 &1114040580
 GameObject:
   m_ObjectHideFlags: 0

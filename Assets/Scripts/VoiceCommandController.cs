@@ -13,7 +13,8 @@ public class VoiceCommandController
         Action onMetronomeOff,
         Action onPause,
         Action onResume,
-        Action onEndSession)
+        Action onEndSession,
+        Action onFinishTest)
     {
         Dispose();
 
@@ -26,7 +27,8 @@ public class VoiceCommandController
             "metronome off",
             "pause",
             "resume",
-            "end session"
+            "end session",
+            "finish test"
         };
 
         keywordRecognizer = new KeywordRecognizer(keywords);
@@ -57,6 +59,9 @@ public class VoiceCommandController
                     break;
                 case "end session":
                     onEndSession?.Invoke();
+                    break;
+                case "finish test":
+                    onFinishTest?.Invoke();
                     break;
             }
         };

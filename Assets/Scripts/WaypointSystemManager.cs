@@ -314,6 +314,17 @@ public class WaypointSystemManager : MonoBehaviour
     {
         CompleteSession("Session ended early.");
     }
+
+    public void ForceCompleteForTesting()
+    {
+        if (!sessionController.IsActive)
+        {
+            Debug.LogWarning("ForceCompleteForTesting ignored because no session is active.");
+            return;
+        }
+
+        CompleteSession("Session complete! (test)");
+    }
     
     float GetCurrentOffCourseSeverity()
     {

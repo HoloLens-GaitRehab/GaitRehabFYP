@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 using Microsoft.MixedReality.Toolkit.UI;
@@ -32,9 +33,14 @@ public class StatsUiToggle : MonoBehaviour
     public GameObject mrtkButtonPrefab;
     public Vector3 statsButtonLocalPos = new Vector3(0f, -0.07f, 0f);
     public Vector3 metronomeButtonLocalPos = new Vector3(0f, -0.16f, 0f);
+    public Vector3 testFinishButtonLocalPos = new Vector3(0f, -0.25f, 0f);
     public Vector3 mrtkButtonScale = new Vector3(0.06f, 0.06f, 0.06f);
     public Color statsButtonFallbackColor = new Color(0f, 0.6f, 0.1f, 0.9f);
     public Color metronomeButtonFallbackColor = new Color(0.1f, 0.3f, 0.8f, 0.9f);
+    public Color testFinishButtonFallbackColor = new Color(0.8f, 0.35f, 0.15f, 0.9f);
+
+    [Header("Session Test Tools")]
+    public bool showForceCompleteTestButton = true;
 
     [Header("Start Session Button")]
     public bool showStartSessionButton = true;
@@ -98,20 +104,32 @@ public class StatsUiToggle : MonoBehaviour
     [Header("Session Metrics CSV")]
     public bool writeSessionMetricsCsvOnSessionComplete = true;
     public string sessionMetricsCsvFileName = "session_metrics.csv";
+    public bool writeSampleSessionMetricsOnLaunch = true;
+    [Range(3, 60)] public int sampleSessionMetricsRowCount = 12;
+
+    [Header("Backend Session CSV Upload")]
+    public bool uploadSessionMetricsCsvToBackend = false;
+    [Tooltip("Use your PC LAN IP, not localhost. Example: http://192.168.1.20:4000/api/sessions/upload")]
+    public string backendSessionCsvUploadUrl = "http://127.0.0.1:4000/api/sessions/upload";
+    [Range(3f, 120f)] public float backendSessionCsvUploadTimeoutSeconds = 20f;
+    public bool uploadSampleSessionMetricsCsvOnLaunch = false;
 
     private GameObject canvasObj;
     private GameObject panelObj;
     private Text panelText;
     private Button toggleButton;
     private Button metronomeButton;
+    private Button testFinishButton;
     private Text metronomeButtonText;
     private GameObject mrtkStatsButton;
     private GameObject mrtkMetronomeButton;
+    private GameObject mrtkTestFinishButton;
     private CompletionOverlayController completionOverlayController = new CompletionOverlayController();
     private SessionDwellControlController sessionDwellControlController = new SessionDwellControlController();
     private StartSessionControlController startSessionControlController = new StartSessionControlController();
     private StartupCsvController startupCsvController = new StartupCsvController();
     private SessionMetricsCsvController sessionMetricsCsvController = new SessionMetricsCsvController();
+    private SessionCsvUploadController sessionCsvUploadController = new SessionCsvUploadController();
     private CsvExportService csvExportService = new CsvExportService();
     private VoiceCommandController voiceCommandController = new VoiceCommandController();
     private UiFollowController uiFollowController = new UiFollowController();
@@ -133,6 +151,7 @@ public class StatsUiToggle : MonoBehaviour
         startSessionControlController.EnsureCreated(cameraTransform, GetStartSessionControlSettings(), OnStartSessionPressed);
         SetupVoiceCommands();
         WriteStartupSampleCsv();
+        WriteSampleSessionMetricsCsv();
     }
 
     void CreateUi()
@@ -183,6 +202,11 @@ public class StatsUiToggle : MonoBehaviour
         {
             mrtkStatsButton = CreateMrtkButton("StatsButton", statsButtonLocalPos, "Stats", TogglePanel);
             mrtkMetronomeButton = CreateMrtkButton("MetronomeButton", metronomeButtonLocalPos, "Metronome: Off", ToggleMetronome);
+
+            if (showForceCompleteTestButton)
+            {
+                mrtkTestFinishButton = CreateMrtkButton("TestFinishButton", testFinishButtonLocalPos, "Finish Test", TriggerTestSessionCompletion);
+            }
         }
         else
         {
@@ -235,6 +259,32 @@ public class StatsUiToggle : MonoBehaviour
             metroTextRect.anchoredPosition = Vector2.zero;
 
             metronomeButton.onClick.AddListener(ToggleMetronome);
+
+            if (showForceCompleteTestButton)
+            {
+                GameObject finishBtnObj = new GameObject("TestFinishButton");
+                finishBtnObj.transform.SetParent(canvasObj.transform, false);
+                Image finishBtnImage = finishBtnObj.AddComponent<Image>();
+                finishBtnImage.color = testFinishButtonFallbackColor;
+                testFinishButton = finishBtnObj.AddComponent<Button>();
+                RectTransform finishBtnRect = finishBtnObj.GetComponent<RectTransform>();
+                finishBtnRect.sizeDelta = buttonSize;
+                finishBtnRect.anchoredPosition = new Vector2(0f, -150f);
+
+                GameObject finishTextObj = new GameObject("TestFinishButtonText");
+                finishTextObj.transform.SetParent(finishBtnObj.transform, false);
+                Text finishText = finishTextObj.AddComponent<Text>();
+                finishText.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+                finishText.fontSize = 24;
+                finishText.color = Color.white;
+                finishText.alignment = TextAnchor.MiddleCenter;
+                finishText.text = "Finish Test";
+                RectTransform finishTextRect = finishText.GetComponent<RectTransform>();
+                finishTextRect.sizeDelta = buttonSize;
+                finishTextRect.anchoredPosition = Vector2.zero;
+
+                testFinishButton.onClick.AddListener(TriggerTestSessionCompletion);
+            }
         }
 
         // Start hidden
@@ -416,7 +466,19 @@ public class StatsUiToggle : MonoBehaviour
         return new SessionMetricsCsvController.Settings
         {
             writeOnSessionComplete = writeSessionMetricsCsvOnSessionComplete,
-            fileName = sessionMetricsCsvFileName
+            fileName = sessionMetricsCsvFileName,
+            writeSampleDataOnLaunch = writeSampleSessionMetricsOnLaunch,
+            sampleRowCount = sampleSessionMetricsRowCount
+        };
+    }
+
+    SessionCsvUploadController.Settings GetSessionCsvUploadSettings()
+    {
+        return new SessionCsvUploadController.Settings
+        {
+            uploadEnabled = uploadSessionMetricsCsvToBackend,
+            uploadUrl = backendSessionCsvUploadUrl,
+            timeoutSeconds = backendSessionCsvUploadTimeoutSeconds
         };
     }
 
@@ -467,6 +529,14 @@ public class StatsUiToggle : MonoBehaviour
 
         bool newState = !waypointManager.enableMetronome;
         waypointManager.ToggleMetronome(newState);
+    }
+
+    void TriggerTestSessionCompletion()
+    {
+        if (waypointManager == null)
+            return;
+
+        waypointManager.ForceCompleteForTesting();
     }
 
     void UpdateSessionDwellControls()
@@ -540,6 +610,10 @@ public class StatsUiToggle : MonoBehaviour
             {
                 if (waypointManager != null)
                     waypointManager.EndSessionEarly();
+            },
+            onFinishTest: () =>
+            {
+                TriggerTestSessionCompletion();
             });
     }
 
@@ -556,7 +630,8 @@ public class StatsUiToggle : MonoBehaviour
             csvExportService,
             startupPicturesFolderName,
             writeUsbVisibleCsvCopyOnLaunch,
-            Application.persistentDataPath);
+            Application.persistentDataPath,
+            OnSessionMetricsCsvWritten);
     }
 
     void WriteStartupSampleCsv()
@@ -567,6 +642,34 @@ public class StatsUiToggle : MonoBehaviour
             startupPicturesFolderName,
             writeUsbVisibleCsvCopyOnLaunch,
             Application.persistentDataPath);
+    }
+
+    void WriteSampleSessionMetricsCsv()
+    {
+        Action<string, string, string> onSampleRowWritten = null;
+        if (uploadSampleSessionMetricsCsvOnLaunch)
+        {
+            onSampleRowWritten = OnSessionMetricsCsvWritten;
+        }
+
+        sessionMetricsCsvController.WriteSampleDatasetOnLaunch(
+            GetSessionMetricsCsvSettings(),
+            csvExportService,
+            startupPicturesFolderName,
+            writeUsbVisibleCsvCopyOnLaunch,
+            Application.persistentDataPath,
+            onSampleRowWritten);
+    }
+
+    void OnSessionMetricsCsvWritten(string fileName, string header, string row)
+    {
+        sessionCsvUploadController.TryUploadCsvRow(
+            this,
+            GetSessionCsvUploadSettings(),
+            fileName,
+            header,
+            row,
+            "Session metrics");
     }
 
     GameObject CreateMrtkButton(string name, Vector3 localPos, string label, UnityEngine.Events.UnityAction onClick)
