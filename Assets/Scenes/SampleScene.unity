@@ -501,7 +501,7 @@ MonoBehaviour:
   writeSampleSessionMetricsOnLaunch: 1
   sampleSessionMetricsRowCount: 12
   uploadSessionMetricsCsvToBackend: 1
-  backendSessionCsvUploadUrl: http://192.168.1.119:4000/api/sessions/upload
+  backendSessionCsvUploadUrl: https://gaitrehab-csv-viewer.onrender.com/api/sessions/upload
   backendSessionCsvUploadTimeoutSeconds: 20
   uploadSampleSessionMetricsCsvOnLaunch: 0
 --- !u!1 &1114040580
