@@ -37,6 +37,40 @@ Package manifest:
 - CSV export for startup checks and session metrics
 - Optional CSV upload to backend API
 
+## Architecture Diagram
+
+```mermaid
+flowchart LR
+	subgraph HL[HoloLens Device: Unity App]
+		UI[StatsUiToggle UI Layer]
+		Controls[Voice and Start Controls]
+		Session[WaypointSystemManager and SessionController]
+		Guidance[StraightPathGuide OffCourseTracker DriftArrowController]
+		Metrics[SessionMetricsCsvController]
+		Export[CsvExportService]
+		Upload[SessionCsvUploadController Optional]
+
+		UI --> Session
+		Controls --> Session
+		Session --> Guidance
+		Session --> Metrics
+		Metrics --> Export
+		Metrics -.optional.-> Upload
+	end
+
+	Export --> LocalCsv[On-device CSV Storage]
+	Upload --> Api[Backend Upload API]
+	Api --> Store[Session Storage]
+	Store --> Dashboard[Analytics Dashboard]
+```
+
+Flow summary:
+
+1. Session control and UI drive the core session manager.
+2. Session manager computes gait metrics and guidance state.
+3. Metrics are written to local CSV on-device.
+4. If enabled, CSV rows are uploaded to backend for centralized analytics.
+
 ## Repository Layout
 
 - [Assets/Scenes](Assets/Scenes): Unity scenes (current main scene: SampleScene)
