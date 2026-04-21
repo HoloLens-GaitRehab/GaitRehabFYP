@@ -20,6 +20,8 @@ public class CompletionOverlayController
         public int completionBodyMinFontSize;
         public float completionFadeSeconds;
         public float completionEntryScale;
+        public bool autoHideCompletionOverlay;
+        public float completionOverlayAutoHideSeconds;
     }
 
     private GameObject completionOverlayCanvas;
@@ -30,12 +32,16 @@ public class CompletionOverlayController
     private bool overlayTargetVisible;
     private float overlayVisibility;
     private float baseScale = 0.0013f;
+    private float overlayAutoHideAtTime = -1f;
+    private bool overlayDismissedForCurrentSession;
 
     public void ResetForNewSession()
     {
         completionOverlayShown = false;
         overlayTargetVisible = false;
         overlayVisibility = 0f;
+        overlayAutoHideAtTime = -1f;
+        overlayDismissedForCurrentSession = false;
         Hide();
     }
 
@@ -140,7 +146,7 @@ public class CompletionOverlayController
             if (eligible)
             {
                 statsText = waypointManager.GetStatsText();
-                shouldShow = !string.IsNullOrWhiteSpace(statsText);
+                shouldShow = !overlayDismissedForCurrentSession && !string.IsNullOrWhiteSpace(statsText);
             }
         }
 
@@ -151,6 +157,23 @@ public class CompletionOverlayController
             {
                 ApplyText(statsText, settings.completionOverlayAccentColor);
                 completionOverlayShown = true;
+
+                if (settings.autoHideCompletionOverlay)
+                {
+                    overlayAutoHideAtTime = Time.time + Mathf.Max(1f, settings.completionOverlayAutoHideSeconds);
+                }
+                else
+                {
+                    overlayAutoHideAtTime = -1f;
+                }
+            }
+
+            if (settings.autoHideCompletionOverlay && overlayAutoHideAtTime > 0f && Time.time >= overlayAutoHideAtTime)
+            {
+                shouldShow = false;
+                completionOverlayShown = false;
+                overlayDismissedForCurrentSession = true;
+                overlayAutoHideAtTime = -1f;
             }
         }
         else
@@ -166,6 +189,7 @@ public class CompletionOverlayController
     {
         overlayTargetVisible = false;
         overlayVisibility = 0f;
+        overlayAutoHideAtTime = -1f;
 
         if (completionOverlayCanvasGroup != null)
             completionOverlayCanvasGroup.alpha = 0f;

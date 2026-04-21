@@ -94,6 +94,8 @@ public class StatsUiToggle : MonoBehaviour
     public int completionBodyMinFontSize = 18;
     [Range(0.05f, 1.2f)] public float completionOverlayFadeSeconds = 0.28f;
     [Range(0.75f, 1f)] public float completionOverlayEntryScale = 0.93f;
+    public bool autoHideCompletionOverlay = true;
+    [Range(1f, 30f)] public float completionOverlayAutoHideSeconds = 8f;
 
     [Header("Startup CSV Test")]
     public bool writeStartupSampleCsvOnLaunch = false;
@@ -366,7 +368,9 @@ public class StatsUiToggle : MonoBehaviour
             completionTitleMinFontSize = completionTitleMinFontSize,
             completionBodyMinFontSize = completionBodyMinFontSize,
             completionFadeSeconds = completionOverlayFadeSeconds,
-            completionEntryScale = completionOverlayEntryScale
+            completionEntryScale = completionOverlayEntryScale,
+            autoHideCompletionOverlay = autoHideCompletionOverlay,
+            completionOverlayAutoHideSeconds = completionOverlayAutoHideSeconds
         };
     }
 
