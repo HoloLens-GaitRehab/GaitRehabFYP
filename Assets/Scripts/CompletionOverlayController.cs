@@ -34,6 +34,7 @@ public class CompletionOverlayController
     private float baseScale = 0.0013f;
     private float overlayAutoHideAtTime = -1f;
     private bool overlayDismissedForCurrentSession;
+    private string lastAppliedStatsText = "";
 
     public void ResetForNewSession()
     {
@@ -42,6 +43,7 @@ public class CompletionOverlayController
         overlayVisibility = 0f;
         overlayAutoHideAtTime = -1f;
         overlayDismissedForCurrentSession = false;
+        lastAppliedStatsText = "";
         Hide();
     }
 
@@ -156,6 +158,7 @@ public class CompletionOverlayController
             if (!completionOverlayShown)
             {
                 ApplyText(statsText, settings.completionOverlayAccentColor);
+                lastAppliedStatsText = statsText;
                 completionOverlayShown = true;
 
                 if (settings.autoHideCompletionOverlay)
@@ -166,6 +169,11 @@ public class CompletionOverlayController
                 {
                     overlayAutoHideAtTime = -1f;
                 }
+            }
+            else if (statsText != lastAppliedStatsText)
+            {
+                ApplyText(statsText, settings.completionOverlayAccentColor);
+                lastAppliedStatsText = statsText;
             }
 
             if (settings.autoHideCompletionOverlay && overlayAutoHideAtTime > 0f && Time.time >= overlayAutoHideAtTime)
@@ -179,6 +187,8 @@ public class CompletionOverlayController
         else
         {
             completionOverlayShown = false;
+            if (!overlayTargetVisible)
+                lastAppliedStatsText = "";
         }
 
         overlayTargetVisible = shouldShow;

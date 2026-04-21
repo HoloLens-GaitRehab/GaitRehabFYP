@@ -551,6 +551,10 @@ public class StatsUiToggle : MonoBehaviour
     void OnStartSessionPressed()
     {
         completionOverlayController.ResetForNewSession();
+        if (waypointManager != null)
+        {
+            waypointManager.SetSessionStatsStatusLine("");
+        }
 
         if (waypointManager != null)
         {
@@ -667,13 +671,40 @@ public class StatsUiToggle : MonoBehaviour
 
     void OnSessionMetricsCsvWritten(string fileName, string header, string row)
     {
+        SessionCsvUploadController.Settings uploadSettings = GetSessionCsvUploadSettings();
+        if (waypointManager != null && waypointManager.IsSessionCompleted)
+        {
+            if (!uploadSettings.uploadEnabled)
+            {
+                waypointManager.SetSessionStatsStatusLine("CSV upload: disabled");
+                return;
+            }
+
+            waypointManager.SetSessionStatsStatusLine("CSV upload: sending...");
+        }
+
         sessionCsvUploadController.TryUploadCsvRow(
             this,
-            GetSessionCsvUploadSettings(),
+            uploadSettings,
             fileName,
             header,
             row,
-            "Session metrics");
+            "Session metrics",
+            (success, detail) =>
+            {
+                if (waypointManager == null || !waypointManager.IsSessionCompleted)
+                    return;
+
+                if (success)
+                {
+                    waypointManager.SetSessionStatsStatusLine("CSV upload: success");
+                }
+                else
+                {
+                    string suffix = string.IsNullOrWhiteSpace(detail) ? "" : " (" + detail + ")";
+                    waypointManager.SetSessionStatsStatusLine("CSV upload: failed" + suffix);
+                }
+            });
     }
 
     GameObject CreateMrtkButton(string name, Vector3 localPos, string label, UnityEngine.Events.UnityAction onClick)

@@ -73,6 +73,7 @@ public class WaypointSystemManager : MonoBehaviour
     private StraightPathGuide straightPathGuide = new StraightPathGuide();
     private OffCourseTracker offCourseTracker = new OffCourseTracker();
     private DriftArrowController driftArrowController = new DriftArrowController();
+    private string sessionStatsStatusLine = "";
 
     public float CurrentOffCoursePercent { get; private set; }
     public bool IsSessionActive => sessionController.IsActive;
@@ -121,6 +122,7 @@ public class WaypointSystemManager : MonoBehaviour
             return;
 
         sessionController.Begin(playerCamera.position, Time.time);
+        sessionStatsStatusLine = "";
         offCourseTracker.Reset();
         CurrentOffCoursePercent = 0f;
 
@@ -231,7 +233,25 @@ public class WaypointSystemManager : MonoBehaviour
 
     public string GetStatsText()
     {
-        return sessionController.GetStatsText();
+        string stats = sessionController.GetStatsText();
+
+        if (!sessionController.IsCompleted || string.IsNullOrWhiteSpace(sessionStatsStatusLine))
+            return stats;
+
+        if (string.IsNullOrWhiteSpace(stats))
+            return sessionStatsStatusLine;
+
+        return stats + "\n" + sessionStatsStatusLine;
+    }
+
+    public void SetSessionStatsStatusLine(string statusLine)
+    {
+        sessionStatsStatusLine = statusLine ?? "";
+
+        if (statsText != null && sessionController.IsCompleted)
+        {
+            statsText.text = GetStatsText();
+        }
     }
 
     void UpdateOffCourse(float deltaTime)
@@ -274,7 +294,7 @@ public class WaypointSystemManager : MonoBehaviour
 
         if (statsText != null)
         {
-            statsText.text = sessionController.FinalSessionStats;
+            statsText.text = GetStatsText();
         }
 
         metronomeController.SetEnabled(false, showMetronomeArc);

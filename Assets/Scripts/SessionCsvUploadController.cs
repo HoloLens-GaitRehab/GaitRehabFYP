@@ -1,4 +1,5 @@
 using System.Collections;
+using System;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
@@ -18,29 +19,38 @@ public class SessionCsvUploadController
         string fileName,
         string header,
         string row,
-        string logContext)
+        string logContext,
+        Action<bool, string> onUploadCompleted = null)
     {
         if (!settings.uploadEnabled)
+        {
+            if (onUploadCompleted != null)
+                onUploadCompleted(false, "Upload disabled");
             return;
+        }
 
         if (owner == null)
         {
             Debug.LogWarning("[SessionCsvUploadController] Upload skipped because owner is null.");
+            if (onUploadCompleted != null)
+                onUploadCompleted(false, "Uploader owner is missing");
             return;
         }
 
         if (string.IsNullOrWhiteSpace(settings.uploadUrl))
         {
             Debug.LogWarning("[SessionCsvUploadController] Upload enabled but URL is empty.");
+            if (onUploadCompleted != null)
+                onUploadCompleted(false, "Upload URL is empty");
             return;
         }
 
         string safeName = CsvExportService.SanitizeCsvFileName(fileName, "session_metrics.csv");
         string csvPayload = header + "\n" + row + "\n";
-        owner.StartCoroutine(UploadCsvCoroutine(settings, safeName, csvPayload, logContext));
+        owner.StartCoroutine(UploadCsvCoroutine(settings, safeName, csvPayload, logContext, onUploadCompleted));
     }
 
-    IEnumerator UploadCsvCoroutine(Settings settings, string fileName, string csvPayload, string logContext)
+    IEnumerator UploadCsvCoroutine(Settings settings, string fileName, string csvPayload, string logContext, Action<bool, string> onUploadCompleted)
     {
         byte[] csvBytes = Encoding.UTF8.GetBytes(csvPayload);
 
@@ -62,10 +72,14 @@ public class SessionCsvUploadController
             if (hasError)
             {
                 Debug.LogWarning("[SessionCsvUploadController] " + logContext + " CSV upload failed: " + request.error + " | URL: " + settings.uploadUrl);
+                if (onUploadCompleted != null)
+                    onUploadCompleted(false, request.error);
                 yield break;
             }
 
             Debug.Log("[SessionCsvUploadController] " + logContext + " CSV uploaded: " + fileName + " | URL: " + settings.uploadUrl);
+            if (onUploadCompleted != null)
+                onUploadCompleted(true, "HTTP " + request.responseCode);
         }
     }
 }
