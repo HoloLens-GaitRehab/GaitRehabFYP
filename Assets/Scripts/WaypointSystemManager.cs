@@ -41,6 +41,10 @@ public class WaypointSystemManager : MonoBehaviour
     public float straightGuideLineFloorOffset = 0.02f;
     public float assumedEyeHeight = 1.6f;
 
+    [Header("Room Adaptation")]
+    public bool capLineLengthForSmallSpaces = true;
+    [Range(2f, 12f)] public float maxLineLengthForSmallSpaces = 4.5f;
+
     [Header("Line End Marker")]
     public bool enableLineEndMarker = true;
     public Color lineEndMarkerColor = new Color(1f, 0.95f, 0.2f, 0.95f);
@@ -391,12 +395,18 @@ public class WaypointSystemManager : MonoBehaviour
 
     StraightPathGuide.Settings GetStraightPathGuideSettings()
     {
+        float effectiveLineLength = Mathf.Max(1f, straightGuideLineLength);
+        if (capLineLengthForSmallSpaces)
+        {
+            effectiveLineLength = Mathf.Min(effectiveLineLength, Mathf.Clamp(maxLineLengthForSmallSpaces, 2f, 12f));
+        }
+
         return new StraightPathGuide.Settings
         {
             straightGuideLineColor = straightGuideLineColor,
             straightGuideLineAlpha = straightGuideLineAlpha,
             straightGuideLineWidth = straightGuideLineWidth,
-            straightGuideLineLength = straightGuideLineLength,
+            straightGuideLineLength = effectiveLineLength,
             straightGuideLineFloorOffset = straightGuideLineFloorOffset,
             enableLineEndMarker = enableLineEndMarker,
             lineEndMarkerColor = lineEndMarkerColor,
