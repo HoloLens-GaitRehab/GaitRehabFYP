@@ -28,6 +28,16 @@ public class StartSessionControlController
         public bool followStartButtonVerticalGaze;
         public float startButtonMinHeightAboveEyes;
         public bool hideStartButtonAfterStart;
+        public bool showStartupInstructionCard;
+        public string startupInstructionText;
+        public float startupInstructionDistance;
+        public float startupInstructionVerticalOffset;
+        public Vector2 startupInstructionSize;
+        public float startupInstructionScale;
+        public Color startupInstructionBackgroundColor;
+        public Color startupInstructionTextColor;
+        public int startupInstructionFontSize;
+        public bool hideStartupInstructionAfterStart;
     }
 
     private Button startSessionFallbackButton;
@@ -37,6 +47,9 @@ public class StartSessionControlController
     private Transform startDwellBarFill;
     private Renderer startDwellBarBgRenderer;
     private Renderer startDwellBarFillRenderer;
+    private GameObject startupInstructionCanvas;
+    private Text startupInstructionLabel;
+    private bool hasDismissedStartupInstruction;
     private float startDwellTimer;
     private bool startTriggered;
     private bool waitingForNextSession;
@@ -50,6 +63,8 @@ public class StartSessionControlController
         {
             TryCreateStartSessionButton(cameraTransform, settings, onStartSessionPressed);
         }
+
+        EnsureStartupInstructionCard(cameraTransform, settings);
     }
 
     public void Update(Transform cameraTransform, WaypointSystemManager waypointManager, Settings settings, Action onStartSessionPressed)
@@ -59,6 +74,7 @@ public class StartSessionControlController
 
         UpdateStartButtonSessionCycle(waypointManager, settings, cameraTransform, onStartSessionPressed);
         UpdateStartDwellActivation(cameraTransform, settings, onStartSessionPressed);
+        UpdateStartupInstructionCard(waypointManager, settings);
     }
 
     public void LateUpdatePose(Transform cameraTransform, Settings settings, Action onStartSessionPressed)
@@ -68,6 +84,114 @@ public class StartSessionControlController
 
         EnsureCreated(cameraTransform, settings, onStartSessionPressed);
         UpdateStartSessionButtonPose(cameraTransform, settings);
+        UpdateStartupInstructionPose(cameraTransform, settings);
+    }
+
+    private void EnsureStartupInstructionCard(Transform cameraTransform, Settings settings)
+    {
+        if (!settings.showStartupInstructionCard || cameraTransform == null || startupInstructionCanvas != null)
+            return;
+
+        startupInstructionCanvas = new GameObject("StartupInstructionCanvas");
+        Canvas canvas = startupInstructionCanvas.AddComponent<Canvas>();
+        canvas.renderMode = RenderMode.WorldSpace;
+        startupInstructionCanvas.AddComponent<CanvasScaler>();
+        startupInstructionCanvas.AddComponent<GraphicRaycaster>();
+
+        RectTransform canvasRect = startupInstructionCanvas.GetComponent<RectTransform>();
+        canvasRect.sizeDelta = settings.startupInstructionSize;
+
+        GameObject panelObj = new GameObject("StartupInstructionPanel");
+        panelObj.transform.SetParent(startupInstructionCanvas.transform, false);
+        Image panelImage = panelObj.AddComponent<Image>();
+        panelImage.color = settings.startupInstructionBackgroundColor;
+
+        RectTransform panelRect = panelObj.GetComponent<RectTransform>();
+        panelRect.sizeDelta = settings.startupInstructionSize;
+        panelRect.anchoredPosition = Vector2.zero;
+
+        GameObject textObj = new GameObject("StartupInstructionText");
+        textObj.transform.SetParent(panelObj.transform, false);
+        startupInstructionLabel = textObj.AddComponent<Text>();
+        startupInstructionLabel.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+        startupInstructionLabel.fontSize = Mathf.Max(16, settings.startupInstructionFontSize);
+        startupInstructionLabel.color = settings.startupInstructionTextColor;
+        startupInstructionLabel.alignment = TextAnchor.MiddleCenter;
+        startupInstructionLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
+        startupInstructionLabel.verticalOverflow = VerticalWrapMode.Overflow;
+        startupInstructionLabel.text = string.IsNullOrWhiteSpace(settings.startupInstructionText)
+            ? "Look where you want the session path to begin, then look up at the Start button to begin."
+            : settings.startupInstructionText;
+
+        RectTransform textRect = startupInstructionLabel.GetComponent<RectTransform>();
+        textRect.sizeDelta = settings.startupInstructionSize - new Vector2(36f, 24f);
+        textRect.anchoredPosition = Vector2.zero;
+
+        startupInstructionCanvas.transform.SetParent(null, true);
+        UpdateStartupInstructionPose(cameraTransform, settings);
+    }
+
+    private void UpdateStartupInstructionCard(WaypointSystemManager waypointManager, Settings settings)
+    {
+        if (startupInstructionCanvas == null)
+            return;
+
+        if (!settings.showStartupInstructionCard)
+        {
+            startupInstructionCanvas.SetActive(false);
+            return;
+        }
+
+        if (settings.hideStartupInstructionAfterStart && waypointManager != null && waypointManager.IsSessionActive)
+            hasDismissedStartupInstruction = true;
+
+        bool shouldShow = !hasDismissedStartupInstruction;
+        if (shouldShow && waypointManager != null && waypointManager.IsSessionActive)
+            shouldShow = false;
+
+        startupInstructionCanvas.SetActive(shouldShow);
+
+        if (shouldShow && startupInstructionLabel != null)
+        {
+            startupInstructionLabel.text = string.IsNullOrWhiteSpace(settings.startupInstructionText)
+                ? "Look where you want the session path to begin, then look up at the Start button to begin."
+                : settings.startupInstructionText;
+        }
+    }
+
+    private void UpdateStartupInstructionPose(Transform cameraTransform, Settings settings)
+    {
+        if (startupInstructionCanvas == null || cameraTransform == null)
+            return;
+
+        if (startupInstructionCanvas.transform.parent != null)
+            startupInstructionCanvas.transform.SetParent(null, true);
+
+        Vector3 horizontalForward = cameraTransform.forward;
+        horizontalForward.y = 0f;
+        if (horizontalForward.sqrMagnitude < 0.0001f)
+        {
+            horizontalForward = cameraTransform.parent != null ? cameraTransform.parent.forward : Vector3.forward;
+            horizontalForward.y = 0f;
+        }
+        horizontalForward.Normalize();
+
+        RectTransform rect = startupInstructionCanvas.GetComponent<RectTransform>();
+        if (rect != null)
+            rect.sizeDelta = settings.startupInstructionSize;
+
+        Vector3 targetPos = cameraTransform.position
+            + horizontalForward * Mathf.Max(1.8f, settings.startupInstructionDistance)
+            + Vector3.up * Mathf.Min(settings.startupInstructionVerticalOffset, -0.32f);
+
+        Vector3 toCamera = cameraTransform.position - targetPos;
+        toCamera.y = 0f;
+        if (toCamera.sqrMagnitude < 0.001f)
+            toCamera = -horizontalForward;
+
+        startupInstructionCanvas.transform.position = targetPos;
+        startupInstructionCanvas.transform.rotation = Quaternion.LookRotation(-toCamera.normalized, Vector3.up);
+        startupInstructionCanvas.transform.localScale = Vector3.one * Mathf.Clamp(settings.startupInstructionScale, 0.0007f, 0.0035f);
     }
 
     private void TryCreateStartSessionButton(Transform cameraTransform, Settings settings, Action onStartSessionPressed)
@@ -356,6 +480,13 @@ public class StartSessionControlController
     {
         startTriggered = true;
         onStartSessionPressed?.Invoke();
+
+        if (settings.hideStartupInstructionAfterStart)
+        {
+            hasDismissedStartupInstruction = true;
+            if (startupInstructionCanvas != null)
+                startupInstructionCanvas.SetActive(false);
+        }
 
         if (settings.hideStartButtonAfterStart && startSessionButton != null)
         {

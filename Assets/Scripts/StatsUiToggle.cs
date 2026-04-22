@@ -50,6 +50,19 @@ public class StatsUiToggle : MonoBehaviour
     public float startButtonMinHeightAboveEyes = 0.4f;
     public bool hideStartButtonAfterStart = true;
 
+    [Header("Startup Instruction Card")]
+    public bool showStartupInstructionCard = true;
+    [TextArea(2, 4)]
+    public string startupInstructionText = "Look where you want the session path to begin, then look up at the Start button to begin.";
+    public float startupInstructionDistance = 2.05f;
+    public float startupInstructionVerticalOffset = -0.34f;
+    public Vector2 startupInstructionSize = new Vector2(520f, 150f);
+    public float startupInstructionScale = 0.0017f;
+    public Color startupInstructionBackgroundColor = new Color(0f, 0f, 0f, 0.68f);
+    public Color startupInstructionTextColor = new Color(0.97f, 0.99f, 1f, 1f);
+    public int startupInstructionFontSize = 28;
+    public bool hideStartupInstructionAfterStart = true;
+
     [Header("Hands-Free Start (Dwell)")]
     public bool useDwellStart = true;
     public float startDwellSeconds = 1.5f;
@@ -452,7 +465,17 @@ public class StatsUiToggle : MonoBehaviour
             startButtonOffset = startButtonOffset,
             followStartButtonVerticalGaze = followStartButtonVerticalGaze,
             startButtonMinHeightAboveEyes = startButtonMinHeightAboveEyes,
-            hideStartButtonAfterStart = hideStartButtonAfterStart
+            hideStartButtonAfterStart = hideStartButtonAfterStart,
+            showStartupInstructionCard = showStartupInstructionCard,
+            startupInstructionText = startupInstructionText,
+            startupInstructionDistance = startupInstructionDistance,
+            startupInstructionVerticalOffset = startupInstructionVerticalOffset,
+            startupInstructionSize = startupInstructionSize,
+            startupInstructionScale = startupInstructionScale,
+            startupInstructionBackgroundColor = startupInstructionBackgroundColor,
+            startupInstructionTextColor = startupInstructionTextColor,
+            startupInstructionFontSize = startupInstructionFontSize,
+            hideStartupInstructionAfterStart = hideStartupInstructionAfterStart
         };
     }
 
