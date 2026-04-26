@@ -627,6 +627,16 @@ public class StatsUiToggle : MonoBehaviour
                 if (waypointManager != null)
                     waypointManager.ToggleMetronome(false);
             },
+            onMetronomeFaster: () =>
+            {
+                if (waypointManager != null)
+                    waypointManager.AdjustMetronomeSpeed(0.1f);
+            },
+            onMetronomeSlower: () =>
+            {
+                if (waypointManager != null)
+                    waypointManager.AdjustMetronomeSpeed(-0.1f);
+            },
             onPause: () =>
             {
                 if (waypointManager != null)

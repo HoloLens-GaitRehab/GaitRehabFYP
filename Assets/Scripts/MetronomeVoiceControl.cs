@@ -31,7 +31,11 @@ public class MetronomeVoiceControl : MonoBehaviour
             "enable metronome",
             "disable metronome",
             "start metronome",
-            "stop metronome"
+            "stop metronome",
+            "metronome faster",
+            "metronome slower",
+            "speed up metronome",
+            "slow down metronome"
         };
         
         keywordRecognizer = new KeywordRecognizer(keywords);
@@ -60,6 +64,18 @@ public class MetronomeVoiceControl : MonoBehaviour
             case "stop metronome":
                 waypointManager.ToggleMetronome(false);
                 Debug.Log("Metronome disabled");
+                break;
+
+            case "metronome faster":
+            case "speed up metronome":
+                waypointManager.AdjustMetronomeSpeed(0.1f);
+                Debug.Log("Metronome sped up");
+                break;
+
+            case "metronome slower":
+            case "slow down metronome":
+                waypointManager.AdjustMetronomeSpeed(-0.1f);
+                Debug.Log("Metronome slowed down");
                 break;
         }
     }

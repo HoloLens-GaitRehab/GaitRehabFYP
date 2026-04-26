@@ -436,4 +436,14 @@ public class WaypointSystemManager : MonoBehaviour
             metronomeController.StartOrEnable(this, GetMetronomeSettings());
         }
     }
+
+    public void AdjustMetronomeSpeed(float multiplierDelta)
+    {
+        metronomeSpeedMultiplier = Mathf.Clamp(metronomeSpeedMultiplier + multiplierDelta, 0.25f, 1.5f);
+
+        if (!enableMetronome || !sessionController.IsActive || sessionController.IsPaused)
+            return;
+
+        metronomeController.StartOrEnable(this, GetMetronomeSettings());
+    }
 }

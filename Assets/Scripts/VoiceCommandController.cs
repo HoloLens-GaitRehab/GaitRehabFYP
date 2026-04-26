@@ -11,6 +11,8 @@ public class VoiceCommandController
         Action onToggleMetronome,
         Action onMetronomeOn,
         Action onMetronomeOff,
+        Action onMetronomeFaster,
+        Action onMetronomeSlower,
         Action onPause,
         Action onResume,
         Action onEndSession,
@@ -25,6 +27,10 @@ public class VoiceCommandController
             "metronome",
             "metronome on",
             "metronome off",
+            "metronome faster",
+            "metronome slower",
+            "speed up metronome",
+            "slow down metronome",
             "pause",
             "resume",
             "end session",
@@ -50,6 +56,14 @@ public class VoiceCommandController
                     break;
                 case "metronome off":
                     onMetronomeOff?.Invoke();
+                    break;
+                case "metronome faster":
+                case "speed up metronome":
+                    onMetronomeFaster?.Invoke();
+                    break;
+                case "metronome slower":
+                case "slow down metronome":
+                    onMetronomeSlower?.Invoke();
                     break;
                 case "pause":
                     onPause?.Invoke();
