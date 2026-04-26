@@ -4,6 +4,15 @@ HoloLens rehabilitation application for guided straight-line gait sessions, in-s
 
 This repository contains the Unity app that runs on HoloLens. It is the data-capture side of the project and can optionally upload CSV session data to the analytics backend.
 
+## System Preview
+### UI
+<img width="1524" height="870" alt="image" src="https://github.com/user-attachments/assets/f2c57205-5af4-4f57-acd0-b73f7186c673" />
+
+### Session Complete
+<img width="1524" height="870" alt="image" src="https://github.com/user-attachments/assets/36cffed8-ce3b-44a1-b7c9-52d7bf331a02" />
+
+
+
 ## System Role
 
 GaitRehabFYP is the mixed reality front end of the full gait-rehab pipeline.
